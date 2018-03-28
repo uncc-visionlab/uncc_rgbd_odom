@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tools to change and view node example output. -->
+<launch>
+    
+    <env name="ROSCONSOLE_CONFIG_FILE" 
+         value="$(find rgbd_odometry)/cfg/rosconsole.conf"/> 
+
+    <arg name="run_rviz" default="true"/>
+    <arg name="run_rgbd_odometry_node" default="true"/>
+    <arg name="run_odometry_analysis_node" default="false"/>    
+            
+    <arg name="camera" default="camera" />
+    <arg name="map_frame" default="optitrack" />
+    <arg name="base_link" default="base_link" />
+    <arg name="rgb_optical_frame" default="rgb_optical_frame" />    
+    <arg name="rgbd_frame" default="rgbd_frame" />
+
+    <arg name="sensor_type_sr4000" default="false" />
+    <arg name="sensor_type_ds325" default="false" />
+    <arg name="sensor_type_astra" default="true" />
+    <arg name="sensor_type_xtion" default="false" />
+    <arg name="sensor_type_kinect_xbox360" default="false" />
+    <arg name="sensor_type_kinect_xboxOne" default="false" />
+
+    <!-- parameters for real-time rviz visualization -->
+    <arg name="path" default="$(find rgbd_odometry)" />
+    <arg name="rviz_config_file" default="rgbd_odometry_w_truth.rviz" />    
+    
+    <include file="$(find rgbd_odometry)/launch/generic.depth.device.launch.xml">
+        <arg name="camera" value="$(arg camera)"/>
+        <arg name="data_skip" default="0" />
+        <arg name="sensor_type_sr4000" value="$(arg sensor_type_sr4000)" />
+        <arg name="sensor_type_ds325" value="$(arg sensor_type_ds325)" />
+        <arg name="sensor_type_astra" value="$(arg sensor_type_astra)" />
+        <arg name="sensor_type_xtion" value="$(arg sensor_type_xtion)" />
+        <arg name="sensor_type_kinect_xbox360" value="$(arg sensor_type_kinect_xbox360)" />        
+        <arg name="sensor_type_kinect_xboxOne" value="$(arg sensor_type_kinect_xboxOne)" />
+    </include>  
+        
+    <group ns="$(arg camera)">
+        <node name="rgbd_odometry" pkg="rgbd_odometry" 
+              type="rgbd_odometry" output="screen" if="$(arg run_rgbd_odometry_node)">
+            <param name="useOpenCL" value= "false"/>
+            <param 
+                name="OpenCL_path"
+                value = "/home.old/arwillis/NRC/ROS_RGBD_Odometry/ros_ws/src/rgbd_odometry/src/opencl"
+            />
+            <param name="depthmask_cl" value = "depthmask.cl"/>
+            <param name="optical_parent" value = "$(arg rgb_optical_frame)"/>
+            <param name="optical_frame" value = "$(arg rgbd_frame)"/>
+
+            <param name="tf_truth_initialize"  value = "false"/>
+            <param name="tf_truth_topic"       value = ""/>
+            <param name="tf_truth_init_time"   value = "0"/>
+            <param name="calibration_pose"     value = ""/> 
+            <!-- valid depth_processing values are "moving_average", "dither", "none" -->
+            <!-- <param name="depth_processing"     value = "dither"/> -->
+            <param name="depth_processing"     value = "none"/>
+            <!-- Detectors/Descriptors: ORB, SIFT, SURF, BRISK -->
+            <!-- Detector-only algorithms: FAST, GFTT -->
+            <param name="feature_detector"     value = "ORB"/>
+            <!-- Detectors/Descriptors: ORB, SIFT, SURF, BRISK -->
+            <!-- Descriptor-only algorithms: BRIEF -->
+            <param name="feature_descriptor"   value = "ORB"/>
+        </node>
+    </group> 
+
+    <node pkg="rviz" type="rviz" name="rviz" output="screen" 
+          args="-d $(arg path)/rviz/$(arg rviz_config_file)" if="$(arg run_rviz)"/> 
+    <!--
+    <node name="map_to_base" pkg="tf" 
+          type="static_transform_publisher"  
+          args="0.0 -0.5 0.0  0 0 0 1 $(arg rgbd_frame) $(arg base_link) 100" />
+    -->
+    <node name="base_to_optical" pkg="tf" 
+                type="static_transform_publisher"  
+                args="0.0 0.0 0.5  0.5 -0.5 0.5 -0.5 $(arg map_frame) $(arg rgb_optical_frame) 100" />
+    
+    <node name="pylistener" pkg="odom_analysis" type="pylistener.py" output="screen" if="$(arg run_odometry_analysis_node)">
+        <param name="map_frame" value="/optitrack"/>
+        <param name="odom_estim_frame" value="$(arg rgbd_frame)"/>
+        <param name="odom_truth_frame" value="None"/>
+        <param name="odom_trigger_topic" value="/$(arg camera)/relative_xform"/>        
+        <param name="posewithcovariance_topic" value="/$(arg camera)/pose"/>      
+    </node>
+    
+</launch>

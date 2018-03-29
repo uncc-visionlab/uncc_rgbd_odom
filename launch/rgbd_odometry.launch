@@ -2,9 +2,6 @@
 <!-- Tools to change and view node example output. -->
 <launch>
     
-    <env name="ROSCONSOLE_CONFIG_FILE" 
-         value="$(find rgbd_odometry)/cfg/rosconsole.conf"/> 
-
     <arg name="run_rviz" default="true"/>
     <arg name="run_rgbd_odometry_node" default="true"/>
     <arg name="run_odometry_analysis_node" default="false"/>    
@@ -23,29 +20,10 @@
     <arg name="sensor_type_kinect_xboxOne" default="false" />
 
     <!-- parameters for real-time rviz visualization -->
-    <arg name="path" default="$(find rgbd_odometry)" />
-    <arg name="rviz_config_file" default="rgbd_odometry_w_truth.rviz" />    
-    
-    <include file="$(find rgbd_odometry)/launch/generic.depth.device.launch.xml">
-        <arg name="camera" value="$(arg camera)"/>
-        <arg name="data_skip" default="0" />
-        <arg name="sensor_type_sr4000" value="$(arg sensor_type_sr4000)" />
-        <arg name="sensor_type_ds325" value="$(arg sensor_type_ds325)" />
-        <arg name="sensor_type_astra" value="$(arg sensor_type_astra)" />
-        <arg name="sensor_type_xtion" value="$(arg sensor_type_xtion)" />
-        <arg name="sensor_type_kinect_xbox360" value="$(arg sensor_type_kinect_xbox360)" />        
-        <arg name="sensor_type_kinect_xboxOne" value="$(arg sensor_type_kinect_xboxOne)" />
-    </include>  
         
     <group ns="$(arg camera)">
-        <node name="rgbd_odometry" pkg="rgbd_odometry" 
-              type="rgbd_odometry" output="screen" if="$(arg run_rgbd_odometry_node)">
-            <param name="useOpenCL" value= "false"/>
-            <param 
-                name="OpenCL_path"
-                value = "/home.old/arwillis/NRC/ROS_RGBD_Odometry/ros_ws/src/rgbd_odometry/src/opencl"
-            />
-            <param name="depthmask_cl" value = "depthmask.cl"/>
+        <node name="uncc_rgbd_odometry" pkg="uncc_rgbd_odometry" 
+              type="uncc_rgbd_odometry" output="screen" if="$(arg run_rgbd_odometry_node)">           
             <param name="optical_parent" value = "$(arg rgb_optical_frame)"/>
             <param name="optical_frame" value = "$(arg rgbd_frame)"/>
 
@@ -66,7 +44,7 @@
     </group> 
 
     <node pkg="rviz" type="rviz" name="rviz" output="screen" 
-          args="-d $(arg path)/rviz/$(arg rviz_config_file)" if="$(arg run_rviz)"/> 
+          args="" if="$(arg run_rviz)"/> 
     <!--
     <node name="map_to_base" pkg="tf" 
           type="static_transform_publisher"  
@@ -75,13 +53,6 @@
     <node name="base_to_optical" pkg="tf" 
                 type="static_transform_publisher"  
                 args="0.0 0.0 0.5  0.5 -0.5 0.5 -0.5 $(arg map_frame) $(arg rgb_optical_frame) 100" />
-    
-    <node name="pylistener" pkg="odom_analysis" type="pylistener.py" output="screen" if="$(arg run_odometry_analysis_node)">
-        <param name="map_frame" value="/optitrack"/>
-        <param name="odom_estim_frame" value="$(arg rgbd_frame)"/>
-        <param name="odom_truth_frame" value="None"/>
-        <param name="odom_trigger_topic" value="/$(arg camera)/relative_xform"/>        
-        <param name="posewithcovariance_topic" value="/$(arg camera)/pose"/>      
-    </node>
+
     
 </launch>

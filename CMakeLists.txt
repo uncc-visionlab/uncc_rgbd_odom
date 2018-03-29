@@ -55,11 +55,11 @@ set( CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKE
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED roscpp rospy genmsg std_msgs geometry_msgs sensor_msgs
-             message_generation cmake_modules eigen_conversions 
+             cmake_modules eigen_conversions 
              cv_bridge image_geometry image_proc image_transport nodelet 
 # freenect_launch not available for jade on ubuntu yet 1/4/2016
 #             tf2 tf2_ros pcl_ros freenect_launch openni2_launch rgbd_launch)
-             tf2 tf2_ros pcl_ros openni2_launch rgbd_launch)
+             tf2 tf2_ros pcl_ros openni2_launch rgbd_launch rgbd_drivers_uncc)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -131,7 +131,6 @@ endif()
 #   std_msgs  # Or other packages containing msgs
 # )
 #generate_messages(DEPENDENCIES std_msgs geometry_msgs sensor_msgs nav_msgs)
-generate_messages(DEPENDENCIES std_msgs geometry_msgs sensor_msgs)
 #generate_dynamic_reconfigure_options(
 #  cfg/nodeExample.cfg
 #)
@@ -150,8 +149,6 @@ catkin_package(
 #  LIBRARIES relative_nav_msgs_subscriber
 #  CATKIN_DEPENDS other_catkin_pkg
 #CATKIN_DEPENDS message_runtime
-    CATKIN_DEPENDS image_geometry roscpp std_msgs geometry_msgs sensor_msgs
-    DEPENDS OpenCV
     # the INCLUDE below allows us to include our headers 
     # using #include <${PROJECT_NAME}/XXXX.h> by creating a 
     # folder having name include/${PROJECT_NAME} from the package root folder
@@ -176,13 +173,18 @@ catkin_package(
 # add_executable(relative_nav_msgs_subscriber_node src/relative_nav_msgs_subscriber_node.cpp)
 #include_directories(~/lib/opencv-2.4/dist/include include ${catkin_INCLUDE_DIRS})
 #include_directories(include ${catkin_INCLUDE_DIRS})
-include_directories(include
-        SYSTEM ${BOOST_INCLUDE_DIRS}
-               ${catkin_INCLUDE_DIRS}
-               ${EIGEN_INCLUDE_DIRS}
+include_directories(
+        include
+        SYSTEM 
+        ${BOOST_INCLUDE_DIRS}
+        ${catkin_INCLUDE_DIRS}
+        ${EIGEN_INCLUDE_DIRS}
 )
 
-add_executable(${PROJECT_NAME} src/rgbd_odometry.cpp
+link_directories(/opt/ros/kinetic/lib)
+
+add_library(${PROJECT_NAME}
+                src/rgbd_odometry.cpp
                 src/rgbd_odom_driver.cpp 
                 src/RobustMatcher.cpp
                 src/point_cloud_xyzrgb.cpp
@@ -190,19 +192,30 @@ add_executable(${PROJECT_NAME} src/rgbd_odometry.cpp
                 src/opencv_function_dev.cpp
                 src/prob_and_stat_function_dev.cpp)
 
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(${PROJECT_NAME}
+    ${catkin_LIBRARIES} 
+    ${Boost_LIBRARIES} 
+    ${OpenCV_LIBS})
+
+add_executable(${PROJECT_NAME}_run 
+                src/rgbd_odometry.cpp
+                src/rgbd_odom_driver.cpp 
+                src/RobustMatcher.cpp
+                src/point_cloud_xyzrgb.cpp
+                src/image_function_dev.cpp
+                src/opencv_function_dev.cpp
+                src/prob_and_stat_function_dev.cpp)
+
+target_link_libraries(${PROJECT_NAME}_run
+    ${catkin_LIBRARIES} 
+    ${Boost_LIBRARIES} 
+    ${OpenCV_LIBS})
 #target_link_libraries(feature3d_engine ${catkin_LIBRARIES} opencv_nonfree)
 #add_dependencies(rgbd_odometry geometry_msgs_gencpp nav_msgs_gencpp)
-add_dependencies(${PROJECT_NAME} image_geometry)
-add_custom_command(TARGET $PROJECT_NAME} POST_BUILD        # Adds a post-build event to MyTest
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
-        "${PROJECT_SOURCE_DIR}/src/depthmask.cl"      # <--this is in-file
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>)                 # <--this is out-file path
-
+#add_dependencies(${PROJECT_NAME} image_geometry)
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
 # add_dependencies(relative_nav_msgs_subscriber_node relative_nav_msgs_subscriber_generate_messages_cpp)
-#add_dependencies(negaposi )
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(relative_nav_msgs_subscriber_node
 #   ${catkin_LIBRARIES}

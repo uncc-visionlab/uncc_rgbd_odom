@@ -78,21 +78,20 @@ void draw2DKeyPoints(cv::UMat image, std::vector<cv::KeyPoint> &keypoints, cv::S
 }
 
 pcl::PointXYZRGB convertRGBD2XYZ(cv::Point2f point2d_frame, cv::Mat rgb_img, cv::Mat depth_img,
-        image_geometry::PinholeCameraModel model_, int row_step) {
+        cv::Mat& rgbCamera_Kmatrix) {
 
     float u = point2d_frame.x;
     float v = point2d_frame.y;
     int iu = round(u);
     int iv = round(v);
     int offset = (iv * depth_img.cols + iu);
-    //int offset = (iv * (row_step/sizeof(float)) + iu);
     float depth = ((float *) depth_img.data)[offset];
-    float center_x = model_.cx();
-    float center_y = model_.cy();
+    float center_x = rgbCamera_Kmatrix.at<float>(0, 2);
+    float center_y = rgbCamera_Kmatrix.at<float>(1, 2);
     // Combine unit conversion (if necessary) with scaling by focal length for computing (X,Y)
     double unit_scaling = 1;
-    float constant_x = unit_scaling / model_.fx();
-    float constant_y = unit_scaling / model_.fy();
+    float constant_x = unit_scaling / rgbCamera_Kmatrix.at<float>(0, 0);
+    float constant_y = unit_scaling / rgbCamera_Kmatrix.at<float>(1, 1);
     float bad_point = std::numeric_limits<float>::quiet_NaN();
     float x, y, z;
     if (!std::isfinite(depth)) {
@@ -114,7 +113,7 @@ pcl::PointXYZRGB convertRGBD2XYZ(cv::Point2f point2d_frame, cv::Mat rgb_img, cv:
     return pt;
 }
 
-bool RGBDOdometryEngine::computeRelativePose2(std::string& name,
+bool RGBDOdometryCore::computeRelativePose2(std::string& name,
         cv::Ptr<cv::FeatureDetector> detector_,
         cv::Ptr<cv::DescriptorExtractor> extractor_, Eigen::Matrix4f& trans,
         Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
@@ -132,10 +131,13 @@ bool RGBDOdometryEngine::computeRelativePose2(std::string& name,
     return true;
 }
 
-bool RGBDOdometryEngine::computeRelativePose(std::string& name,
+bool RGBDOdometryCore::computeRelativePose(std::string& name,
         cv::Ptr<cv::FeatureDetector> detector_,
-        cv::Ptr<cv::DescriptorExtractor> extractor_, Eigen::Matrix4f& trans,
-        Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix, cv::UMat& frame,
+        cv::Ptr<cv::DescriptorExtractor> extractor_, 
+        Eigen::Matrix4f& trans,
+        Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix, 
+        cv::UMat& depthimg,
+        cv::UMat& frame,
         cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
         cv::Ptr<cv::UMat>& descriptors_frame,
         std::vector<Eigen::Matrix4f>& transform_vector,
@@ -145,7 +147,7 @@ bool RGBDOdometryEngine::computeRelativePose(std::string& name,
     static int bad_frames = 0;
     //    ROS_DEBUG("An image was received.\n");
     // unload data from the messenger class
-    std::string keyframe_frameid_str = this->frame_id_str;
+    std::string keyframe_frameid_str = "";
     //        sensor_msgs::PointCloud2::Ptr ptcloud_sptr = aptr->getROSPointCloud2();
     //    if (!COMPUTE_PTCLOUDS) {
     //        pcl_ptcloud_sptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -161,13 +163,15 @@ bool RGBDOdometryEngine::computeRelativePose(std::string& name,
     cv::Mat mask; // type of mask is CV_8U
 #endif
     // Convert Kinect depth image from image-of-shorts (mm) to image-of-floats (m)
-    if (depth_encoding == sensor_msgs::image_encodings::TYPE_16UC1) {
-        ROS_DEBUG("Converting Kinect-style depth image to floating point depth image.");
-        int width = cv_depthimg_ptr->image.cols;
-        int height = cv_depthimg_ptr->image.rows;
+    //if (depth_encoding == sensor_msgs::image_encodings::TYPE_16UC1) {
+    uchar depthtype = depthimg.getMat(cv::ACCESS_READ).type() & CV_MAT_DEPTH_MASK;
+    if (depthtype == CV_16U) {
+        std::cout << "Converting Kinect-style depth image to floating point depth image." << std::endl;
+        int width = depthimg.cols;
+        int height = depthimg.rows;
         depth_frame.create(height, width, CV_32F);
         float bad_point = std::numeric_limits<float>::quiet_NaN();
-        uint16_t* uint_depthvals = (uint16_t *) cv_depthimg_ptr->image.data;
+        uint16_t* uint_depthvals = (uint16_t *) depthimg.getMat(cv::ACCESS_READ).data;
         float* float_depthvals = (float *) depth_frame.getMat(cv::ACCESS_WRITE).data;
         for (int row = 0; row < height; ++row) {
             for (int col = 0; col < width; ++col) {
@@ -178,8 +182,10 @@ bool RGBDOdometryEngine::computeRelativePose(std::string& name,
                 }
             }
         }
-    } else if (depth_encoding == sensor_msgs::image_encodings::TYPE_32FC1) {
-        depth_frame = cv_depthimg_ptr->image.getUMat(cv::ACCESS_READ);
+    } else if (depthtype == CV_16U) {
+        depth_frame = depthimg.clone();
+    } else {
+        std::cout << "Error depth frame numeric format not recognized." << std::endl;
     }
 
     getImageFunctionProvider()->computeMask(depth_frame, mask);
@@ -253,7 +259,7 @@ bool RGBDOdometryEngine::computeRelativePose(std::string& name,
             }
             pcl::PointXYZRGB pt;
             pt = convertRGBD2XYZ(kpt.pt, frame.getMat(cv::ACCESS_READ),
-                    dimg, model_, depth_row_step);
+                    dimg, rgbCamera_Kmatrix);
             //std::cout << "Added point (" << pt.x << ", " << pt.y << ", " << pt.z << ")" << std::endl;
             pcl_ptcloud_sptr->push_back(pt);
             if (std::isnan(kpt.pt.x) || std::isnan(kpt.pt.y) ||
@@ -474,6 +480,13 @@ bool RGBDOdometryEngine::computeRelativePose(std::string& name,
     //            std::cout << " pt2_cur = " << pixel_frame.x << ", " << pixel_frame.y << std::endl;
     //        }
     Eigen::MatrixXd estimate_matrix(MAX_TRIALS, 6);
+    float center_x = rgbCamera_Kmatrix.at<float>(0, 2);
+    float center_y = rgbCamera_Kmatrix.at<float>(1, 2);
+    // Combine unit conversion (if necessary) with scaling by focal length for computing (X,Y)
+    double unit_scaling = 1;
+    float constant_x = unit_scaling / rgbCamera_Kmatrix.at<float>(0, 0);
+    float constant_y = unit_scaling / rgbCamera_Kmatrix.at<float>(1, 1);
+    
     for (int trials = 0; trials < MAX_TRIALS; trials++) {
         for (correspondenceIterator = ptcloud_matches_ransac->begin();
                 correspondenceIterator != ptcloud_matches_ransac->end();
@@ -486,14 +499,14 @@ bool RGBDOdometryEngine::computeRelativePose(std::string& name,
 
             float depth_sq = pt3_rgb_target.z * pt3_rgb_target.z;
             float std_normal_sample = distribution(generator) * (1.425e-3f) * depth_sq;
-            pt3_rgb_target.x += std_normal_sample * ((pixel_prior.x - model_.cx()) / model_.fx());
-            pt3_rgb_target.y += std_normal_sample * ((pixel_prior.y - model_.cy()) / model_.fy());
+            pt3_rgb_target.x += std_normal_sample * ((pixel_prior.x - center_x) * constant_x);
+            pt3_rgb_target.y += std_normal_sample * ((pixel_prior.y - center_y) * constant_y);
             pt3_rgb_target.z += std_normal_sample;
 
             depth_sq = pt3_rgb_source.z * pt3_rgb_source.z;
             std_normal_sample = distribution(generator) * (1.425e-3f) * depth_sq;
-            pt3_rgb_source.x += std_normal_sample * ((pixel_frame.x - model_.cx()) / model_.fx());
-            pt3_rgb_source.y += std_normal_sample * ((pixel_frame.y - model_.cy()) / model_.fy());
+            pt3_rgb_source.x += std_normal_sample * ((pixel_frame.x - center_x) / constant_x);
+            pt3_rgb_source.y += std_normal_sample * ((pixel_frame.y - center_y) / constant_y);
             pt3_rgb_source.z += std_normal_sample;
 
             tgtCloud.push_back(pt3_rgb_target);

@@ -315,7 +315,6 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         ROS_DEBUG("PCL point cloud computed for frame %d.", frame_id);
     }
     depth_encoding = depth_msg->encoding;
-    depth_row_step = depth_msg->step;
     cv_rgbimg_ptr = cv_bridge::toCvShare(rgb_msg_in, sensor_msgs::image_encodings::BGR8);
     if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1) {
         cv_depthimg_ptr = cv_bridge::toCvShare(depth_msg, sensor_msgs::image_encodings::TYPE_16UC1);
@@ -334,6 +333,7 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
     //cv::Ptr<cv::FeatureDetector> detector_;
     // pointer to the feature descriptor extractor object
     //cv::Ptr<cv::DescriptorExtractor> extractor_;
+    cv::UMat depthimg = cv_depthimg_ptr->image.getUMat(cv::ACCESS_READ);
     cv::UMat frame = cv_rgbimg_ptr->image.getUMat(cv::ACCESS_READ);
 
     bool odomEstimatorSuccess;
@@ -363,11 +363,12 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         transform_vector.clear();
 
         //std::cout << "Detector = " << detectorStr << " Descriptor = " << descriptorStr << std::endl;
-        odomEstimatorSuccess = computeRelativePose(rmatcher->detectorStr,
-                rmatcher->detector_, rmatcher->extractor_, trans, covMatrix,
-                frame, keypoints_frame, descriptors_frame, transform_vector,
-                detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
-                numFeatures, numMatches, numInliers);
+            odomEstimatorSuccess = computeRelativePose(rmatcher->detectorStr,
+                    rmatcher->detector_, rmatcher->extractor_, trans, covMatrix,
+                    depthimg, frame, keypoints_frame, descriptors_frame, 
+                    transform_vector,
+                    detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+                    numFeatures, numMatches, numInliers);
 
 #ifdef PERFORMANCE_EVAL
         vec_prior_keypoints[pairIdx] = keypoints_frame;

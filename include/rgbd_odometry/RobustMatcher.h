@@ -13,14 +13,10 @@
 
 #include <boost/shared_ptr.hpp>
 
-#ifdef OPENCV3
 #include <opencv2/features2d.hpp>
 #include <opencv2/xfeatures2d/nonfree.hpp>
 #include <opencv2/xfeatures2d.hpp>
-#else
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/nonfree/features2d.hpp>
-#endif
+
 #include <opencv2/flann/flann.hpp>
 #include <opencv2/flann/dist.h>
 

@@ -178,6 +178,7 @@ include_directories(
         ${BOOST_INCLUDE_DIRS}
         ${catkin_INCLUDE_DIRS}
         ${EIGEN_INCLUDE_DIRS}
+        ${PCL_INCLUDE_DIRS}
 )
 
 link_directories(/opt/ros/kinetic/lib)

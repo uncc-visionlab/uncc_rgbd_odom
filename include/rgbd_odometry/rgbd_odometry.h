@@ -65,7 +65,7 @@ public:
     nh("~"),
     initializationDone(false) {
         std::string opencl_path, depthmask_cl, tf_truth_topic, calibration_pose;
-        std::string optical_parent, optical_frame, depth_processing;
+        std::string optical_parent, optical_frame, depth_processing_str;
         std::string feature_detector, feature_descriptor;
         bool useOpenCL, tf_truth_initialize;
 
@@ -87,18 +87,18 @@ public:
 
         nh.param<std::string>("optical_parent", parent_frame_id_str, "optitrack");
         nh.param<std::string>("optical_frame", rgbd_frame_id_str, "rgbd_frame");
-        nh.param<std::string>("depth_processing", depth_processing, "none");
+        nh.param<std::string>("depth_processing", depth_processing_str, "none");
         std::cout << "RGBD parent coordinate frame name = \"" << optical_parent << "\"" << std::endl;
         std::cout << "RGBD coordinate frame name =  \"" << optical_frame << "\"" << std::endl;
 
-        if (depth_processing.compare("moving_average") == 0) {
+        if (depth_processing_str.compare("moving_average") == 0) {
             std::cout << "Applying moving average depth filter." << std::endl;
-            depth_processing = RGBDOdometryEngine::Depth_Processing::MOVING_AVERAGE;
-        } else if (depth_processing.compare("dither") == 0) {
+            this->depth_processing = Depth_Processing::MOVING_AVERAGE;
+        } else if (depth_processing_str.compare("dither") == 0) {
             std::cout << "Applying dithering depth filter." << std::endl;
-            depth_processing = RGBDOdometryEngine::Depth_Processing::DITHER;
+            this->depth_processing = Depth_Processing::DITHER;
         } else {
-            depth_processing = RGBDOdometryEngine::Depth_Processing::NONE;
+            this->depth_processing = Depth_Processing::NONE;
         }
 
         if (tf_truth_initialize) {

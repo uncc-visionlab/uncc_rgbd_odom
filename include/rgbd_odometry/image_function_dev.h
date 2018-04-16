@@ -9,13 +9,8 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/ocl.hpp>
 
-#ifdef OPENCV3
 #include <opencv2/features2d.hpp>
 #include <opencv2/xfeatures2d/nonfree.hpp>
-#else
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/nonfree/features2d.hpp>
-#endif
 
 class ImageFunctionProvider {
 public:

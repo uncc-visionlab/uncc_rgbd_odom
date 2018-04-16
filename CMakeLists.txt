@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 # this line sets the value of the ${PROJECT_NAME} variable
 project(uncc_rgbd_odom)
-
+subdirs(core)
 # uncomment this if cmake is not finding your packages
 # to view the paths searched and decisions made by cmake
 set( CMAKE_FIND_DEBUG_MODE 1 )
@@ -50,7 +50,6 @@ set( CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} ${GCC_
 set( CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS_DEBUG} ${GCC_PROFILE_LINK_FLAGS}" )
 #set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${GCC_PROFILE_COMPILE_FLAGS}" )
 #set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${GCC_COVERAGE_LINK_FLAGS}" )
-
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -184,7 +183,7 @@ include_directories(
 link_directories(/opt/ros/kinetic/lib)
 
 add_library(${PROJECT_NAME}
-                src/rgbd_odometry.cpp
+                src/rgbd_odometry_core.cpp
                 src/rgbd_odom_driver.cpp 
                 src/RobustMatcher.cpp
                 src/point_cloud_xyzrgb.cpp
@@ -198,7 +197,7 @@ target_link_libraries(${PROJECT_NAME}
     ${OpenCV_LIBS})
 
 add_executable(${PROJECT_NAME}_run 
-                src/rgbd_odometry.cpp
+                src/rgbd_odometry_core.cpp
                 src/rgbd_odom_driver.cpp 
                 src/RobustMatcher.cpp
                 src/point_cloud_xyzrgb.cpp

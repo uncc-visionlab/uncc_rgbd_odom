@@ -25,46 +25,25 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 
+#include <image_transport/subscriber_filter.h>
 #include <image_geometry/pinhole_camera_model.h>
 #include <visualization_msgs/Marker.h>
 #include <cv_bridge/cv_bridge.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 
-// OpenCV includes
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/core/ocl.hpp>
-
-#ifdef OPENCV3
-#include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d/nonfree.hpp>
-#else
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/nonfree/features2d.hpp>
-#endif
-
-// PCL includes
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-
-#include <rgbd_odometry/image_function_dev.h>
-#include <rgbd_odometry/RobustMatcher.h>
+#include <rgbd_odometry/rgbd_odometry_core.h>
 
 #define NUMIDCHARS 3
-
 #define DEBUG false
-#define COMPUTE_PTCLOUDS false
-#define IMAGE_MASK_MARGIN 20
-//#define PERFORMANCE_EVAL false
-
-#ifdef OPENCV3
-static cv::UMat prior_image;
-static cv::Ptr<cv::UMat> prior_descriptors_;
-#else
-static cv::Mat prior_image;
-static cv::Ptr<cv::Mat> prior_descriptors_;
-#endif
+//#define COMPUTE_PTCLOUDS false
+//#ifdef OPENCV3
+//static cv::UMat prior_image;
+//static cv::Ptr<cv::UMat> prior_descriptors_;
+//#else
+//static cv::Mat prior_image;
+//static cv::Ptr<cv::Mat> prior_descriptors_;
+//#endif
 
 namespace stdpatch {
 
@@ -75,107 +54,6 @@ namespace stdpatch {
         return stm.str();
     }
 }
-
-class RGBDOdometryCore {
-public:
-    typedef boost::shared_ptr<RGBDOdometryCore> Ptr;
-
-    RGBDOdometryCore() :
-    imageFunctionProvider(new ImageFunctionProvider),
-    pcl_ptcloud_sptr(new pcl::PointCloud<pcl::PointXYZRGB>),
-    fast_match(false),
-    rmatcher(new RobustMatcher()),
-    numKeyPoints(600) {
-        bool useOpenCL;
-        useOpenCL = false;
-        std::string opencl_path = ".";
-        std::string depthmask_cl = "depthmask.cl";
-        std::string feature_detector = "ORB";
-        std::string feature_descriptor = "ORB";
-        std::string depth_processing = "none";
-
-        getImageFunctionProvider()->initialize(useOpenCL, opencl_path, depthmask_cl);
-        rmatcher->setFeatureDetector(feature_detector);
-        rmatcher->setDescriptorExtractor(feature_descriptor);
-
-        if (depth_processing.compare("moving_average") == 0) {
-            std::cout << "Applying moving average depth filter." << std::endl;
-            depth_processing = RGBDOdometryCore::Depth_Processing::MOVING_AVERAGE;
-        } else if (depth_processing.compare("dither") == 0) {
-            std::cout << "Applying dithering depth filter." << std::endl;
-            depth_processing = RGBDOdometryCore::Depth_Processing::DITHER;
-        } else {
-            depth_processing = RGBDOdometryCore::Depth_Processing::NONE;
-        }
-    }
-
-    virtual ~RGBDOdometryCore() {
-    }
-
-    bool computeRelativePose2(std::string& name,
-            cv::Ptr<cv::FeatureDetector> detector_,
-            cv::Ptr<cv::DescriptorExtractor> extractor_, Eigen::Matrix4f& trans,
-            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
-            cv::UMat& frame,
-            cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
-            cv::Ptr<cv::UMat>& descriptors_frame,
-            cv::UMat& prior_frame,
-            cv::Ptr<std::vector<cv::KeyPoint> >& prior_keypoints_frame,
-            cv::Ptr<cv::UMat>& prior_descriptors_frame,
-            std::vector<Eigen::Matrix4f>& transform_vector,
-            float& detector_time, float& descriptor_time, float& match_time,
-            float& RANSAC_time, float& covarianceTime,
-            int& numFeatures, int& numMatches, int& numInliers);
-
-    bool computeRelativePose(std::string& name, cv::Ptr<cv::FeatureDetector> detector_,
-            cv::Ptr<cv::DescriptorExtractor> extractor_, Eigen::Matrix4f& trans,
-            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
-            cv::UMat& depthimg,
-            cv::UMat& frame,
-            cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
-            cv::Ptr<cv::UMat>& descriptors_frame,
-            std::vector<Eigen::Matrix4f>& transform_vector,
-            float& detector_time, float& descriptor_time, float& match_time,
-            float& RANSAC_time, float& covarianceTime,
-            int& numFeatures, int& numMatches, int& numInliers);
-
-    ImageFunctionProvider::Ptr getImageFunctionProvider() {
-        return imageFunctionProvider;
-    }
-    
-    void setRGBCameraIntrinsics(cv::Mat matrix) {
-        rgbCamera_Kmatrix = matrix;
-    }
-    enum Depth_Processing {
-        NONE, MOVING_AVERAGE, DITHER
-    };
-
-private:
-    // -------------------------
-    // Disabling default copy constructor and default
-    // assignment operator.
-    // -------------------------
-    RGBDOdometryCore(const RGBDOdometryCore& yRef);
-    RGBDOdometryCore& operator=(const RGBDOdometryCore& yRef);
-protected:
-    
-    cv::Mat rgbCamera_Kmatrix;
-    
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_ptcloud_sptr;
-
-    cv::Ptr<std::vector<cv::KeyPoint> > prior_keypoints;    
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr prior_ptcloud_sptr;
-    //std::string prior_keyframe_frameid_str;
-    bool fast_match;
-    int numKeyPoints;
-    RobustMatcher::Ptr rmatcher; // instantiate RobustMatcher
-
-    // class to provide accelerated image processing functions
-    ImageFunctionProvider::Ptr imageFunctionProvider;
-
-    // class to provide depth image processing functions
-    Depth_Processing depth_processing;
-};
 
 class RGBDOdometryEngine : public RGBDOdometryCore {
 public:

@@ -23,7 +23,11 @@
 #endif
 #include <opencv2/flann/flann.hpp>
 #include <opencv2/flann/dist.h>
+
+//#define USE_iGRAND
+#ifdef USE_iGRAND
 #include <rgbd_odometry/opencv_function_dev.h>
+#endif
 
 #define MAX_KEYPOINTS 1000
 
@@ -36,7 +40,9 @@ public:
             int nkeypoints = 600) :
     ratio_(0.8f),
     num_keypoints(nkeypoints) {
+#ifdef USE_iGRAND
         factory["iGRAND"] = create_iGRAND; // ORB is the default feature
+#endif
         factory["ORB"] = create_ORB; // ORB is the default feature
         factory["SIFT"] = create_SIFT;
         factory["SURF"] = create_SURF;
@@ -147,11 +153,13 @@ private:
     // proxy functions are needed since SIFT::create() etc. have optional parameters,
     // so the function pointers can not be unified.
 
+#ifdef USE_iGRAND
     static cv::Ptr<cv::Algorithm> create_iGRAND() {
         cv::Ptr<cv::Algorithm> algo_ptr = cv::iGRAND::create(MAX_KEYPOINTS);
         return algo_ptr;
     };
-
+#endif
+    
     static cv::Ptr<cv::Algorithm> create_ORB() {
         //        return cv::ORB::create();
         cv::Ptr<cv::Algorithm> algo_ptr = cv::ORB::create(MAX_KEYPOINTS);

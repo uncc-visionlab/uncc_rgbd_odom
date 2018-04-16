@@ -1,54 +1,27 @@
-/*
- * File:   Feature3DEngine.cpp
+/* 
+ * File:   rgbd_odometry_core.cpp
  * Author: arwillis
  *
- * Created on August 18, 2015, 10:35 AM
+ * Created on April 14, 2018, 2:34 PM
  */
-#include <math.h>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <iterator>
 #include <random>
 
-// ROS includes
-#include <ros/ros.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <message_filters/subscriber.h>
-//#include <message_filters/time_synchronizer.h>
-//#include <message_filters/sync_policies/exact_time.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <image_transport/image_transport.h>
-#include <image_transport/subscriber_filter.h>
-#include <pcl_conversions/pcl_conversions.h>
-
-// OpenCV includes
-#include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-
-// Eigen includes
-#include <Eigen/Dense>
-#include <Eigen/Geometry>
+#include <rgbd_odometry/rgbd_odometry_core.h>
 
 // PCL includes
 #include <pcl/registration/transformation_estimation_svd.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 
-
-// Includes for this Library
-#include <rgbd_odometry/rgbd_odometry.h>
-#include <rgbd_odometry/point_cloud_xyzrgb.h>
-
-// Draw only the 2D points
-// For circles
-//#define DEBUG false
-//#define COMPUTE_PTCLOUDS false
-//#define IMAGE_MASK_MARGIN 20
-////#define PERFORMANCE_EVAL false
-//
 bool DUMP_MATCH_IMAGES = false;
 bool DUMP_RAW_IMAGES = false;
 bool SHOW_ORB_vs_iGRaND = false;
+
+#define IMAGE_MASK_MARGIN 20
+//#define PERFORMANCE_EVAL false
 
 int toIndex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, int column, int row) {
     return row * cloud->width + column;
@@ -113,6 +86,102 @@ pcl::PointXYZRGB convertRGBD2XYZ(cv::Point2f point2d_frame, cv::Mat rgb_img, cv:
     return pt;
 }
 
+void logTransformData(//std::string& frameid, ros::Time& frame_time,
+        std::string& detector, std::string& descriptor,
+        float detectorTime, float descriptorTime, float matchTime, float RANSACTime, float covarianceTime,
+        int numFeatures, int numMatches, int numInliers,
+        Eigen::Quaternionf& quat, Eigen::Vector3f& trans,
+        Eigen::Matrix4f& transform, Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix,
+        std::vector<Eigen::Matrix4f>& transform_vector) {
+    static int elementIdx = 1;
+    static int StreamPrecision = 8;
+    static Eigen::IOFormat OctaveFmt(StreamPrecision, 0, ", ", ";\n", "", "", "[", "]");
+
+    //if (transform_vector.size() < 1 || frameid.size() < 1)
+    //    return;
+    try {
+        if (!fos) {
+            std::cout << "Opening logfile " << _logfilename << "." << std::endl;
+            fos.open(_logfilename.c_str());
+        }
+        Eigen::Matrix4f curr_transform;
+        std::vector<Eigen::Matrix4f>::iterator poseIterator;
+        //fos << "rgbd_odometry{" << elementIdx << "}.frame_id = '" << frameid << "';" << std::endl;
+        //fos << "rgbd_odometry{" << elementIdx << "}.sec = " << frame_time.sec << ";" << std::endl;
+        //fos << "rgbd_odometry{" << elementIdx << "}.nsec = " << frame_time.nsec << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.detector = '" << detector << "';" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.descriptor = '" << descriptor << "';" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.detectorTime = " << detectorTime << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.descriptorTime = " << descriptorTime << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.matchTime = " << matchTime << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.RANSACTime = " << RANSACTime << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.covarianceTime = " << covarianceTime << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.numFeatures = " << numFeatures << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.numMatches = " << numMatches << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.numInliers = " << numInliers << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.quaternion = [";
+        fos << quat.x() << " " << quat.y() << " " << quat.z() << " " << quat.w() << "];" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.translation = [";
+        fos << trans.x() << " " << trans.y() << " " << trans.z() << "];" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.transform = ";
+        fos << transform.format(OctaveFmt) << ";" << std::endl;
+        fos << "rgbd_odometry{" << elementIdx << "}.covMatrix = ";
+        fos << covMatrix.format(OctaveFmt) << ";" << std::endl;
+        //        fos << "rgbd_odometry{" << elementIdx << "}.noisy_transforms = [ " << std::endl;
+        //        for (poseIterator = transform_vector.begin();
+        //                poseIterator != transform_vector.end(); ++poseIterator) {
+        //            curr_transform = *poseIterator;
+        //            fos << curr_transform.format(OctaveFmt) << ";" << std::endl;
+        //        }
+        //        fos << "];" << std::endl;
+        elementIdx++;
+    } catch (...) {
+        printf("error writing to noisy transform log file.");
+        return;
+    }
+}
+
+bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg) {
+
+    bool odomEstimatorSuccess;
+    float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
+    std::vector<Eigen::Matrix4f> transform_vector;
+    cv::Ptr<std::vector<cv::KeyPoint> > keypoints_frame(new std::vector<cv::KeyPoint>);
+    cv::Ptr<cv::UMat> descriptors_frame(new cv::UMat);
+    double cov[36];
+    Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
+    Eigen::Matrix4f trans;
+    int numFeatures = 0, numMatches = 0, numInliers = 0;
+    transform_vector.clear();
+
+    //std::cout << "Detector = " << detectorStr << " Descriptor = " << descriptorStr << std::endl;
+    odomEstimatorSuccess = computeRelativePose(rmatcher->detectorStr,
+            rmatcher->detector_, rmatcher->extractor_, trans, covMatrix,
+            depthimg, frame, keypoints_frame, descriptors_frame,
+            transform_vector,
+            detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+            numFeatures, numMatches, numInliers);
+
+    prior_keypoints = keypoints_frame;
+    prior_descriptors_ = descriptors_frame;
+    prior_ptcloud_sptr = pcl_ptcloud_sptr;
+    if (!odomEstimatorSuccess) {
+        return false;
+    }
+    Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
+    Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
+    if (LOG_ODOMETRY_TO_FILE) {
+        logTransformData(//keyframe_frameid_str, frame_time,
+                rmatcher->detectorStr, rmatcher->descriptorStr,
+                detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+                numFeatures, numMatches, numInliers,
+                quat, translation,
+                trans, covMatrix, transform_vector);
+    }
+    //prior_keyframe_frameid_str = keyframe_frameid_str;
+    prior_image = frame.clone();
+}
+
 bool RGBDOdometryCore::computeRelativePose2(std::string& name,
         cv::Ptr<cv::FeatureDetector> detector_,
         cv::Ptr<cv::DescriptorExtractor> extractor_, Eigen::Matrix4f& trans,
@@ -131,11 +200,65 @@ bool RGBDOdometryCore::computeRelativePose2(std::string& name,
     return true;
 }
 
+int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& dimg, cv::UMat& mask,
+        std::string& name,
+        cv::Ptr<cv::FeatureDetector> detector_,
+        cv::Ptr<cv::DescriptorExtractor> extractor_,
+        cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
+        cv::Ptr<cv::UMat>& descriptors_frame, float& detector_time, float& descriptor_time,
+        const std::string keyframe_frameid_str) {
+#ifdef USE_iGRAND
+    if (cv::iGRAND * iGRAND_detector = rmatcher->detector_.dynamicCast<cv::iGRAND>()) {
+        iGRAND_detector->setDepthImage(&dimg);
+    }
+#endif
+
+    double t = (double) cv::getTickCount();
+    detector_->detect(frame, *keypoints_frame, mask);
+    int numFeatures = keypoints_frame->size();
+#ifdef PERFORMANCE_EVAL
+    if (keypoints_frame->size() > MAX_KEYPOINTS) {
+        keypoints_frame->resize(MAX_KEYPOINTS);
+    }
+#endif    
+    detector_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
+    //printf("execution time = %dms\n", (int) (t * 1000. / cv::getTickFrequency()));
+    if (SHOW_ORB_vs_iGRaND) {
+        cv::UMat frame_vis = frame.clone(); // refresh visualization frame
+        if (name.compare("ORB") == 0) {
+            cv::Scalar red(0, 0, 255); // BGR order
+            draw2DKeyPoints(frame_vis, *keypoints_frame, red);
+            //cv::imwrite(keyframe_frameid_str + "_" + name + "_keypoints.png", frame_vis);
+            cv::imshow("ORB Feature Detections (red)", frame_vis); // Show our image inside it.
+            cv::waitKey(3);
+        } else if (name.compare("iGRAND") == 0) {
+            cv::Scalar green(0, 255, 0); // BGR order            
+            draw2DKeyPoints(frame_vis, *keypoints_frame, green);
+            cv::imwrite(keyframe_frameid_str + "_" + name + "_keypoints.png", frame_vis);
+            cv::imshow("iGRaND Feature Detections (green)", frame_vis); // Show our image inside it.
+            cv::waitKey(3);
+        }
+        //cv::imshow("Feature Detections (red)", frame_vis); // Show our image inside it.
+        //cv::waitKey(3);
+    }
+
+#ifdef USE_iGRAND
+    if (cv::iGRAND * iGRAND_extractor = extractor_.dynamicCast<cv::iGRAND>()) {
+        iGRAND_extractor->setDepthImage(&dimg);
+    }
+#endif
+
+    t = (double) cv::getTickCount();
+    extractor_->compute(frame, *keypoints_frame, *descriptors_frame);
+    descriptor_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
+    return numFeatures;
+}
+
 bool RGBDOdometryCore::computeRelativePose(std::string& name,
         cv::Ptr<cv::FeatureDetector> detector_,
-        cv::Ptr<cv::DescriptorExtractor> extractor_, 
+        cv::Ptr<cv::DescriptorExtractor> extractor_,
         Eigen::Matrix4f& trans,
-        Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix, 
+        Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
         cv::UMat& depthimg,
         cv::UMat& frame,
         cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
@@ -208,37 +331,23 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
     }
 
     cv::Mat dimg = depth_frame.getMat(cv::ACCESS_READ);
-    if (cv::iGRAND * iGRAND_detector = rmatcher->detector_.dynamicCast<cv::iGRAND>()) {
-        iGRAND_detector->setDepthImage(&dimg);
-    }
-    double t = (double) cv::getTickCount();
-    detector_->detect(frame, *keypoints_frame, mask);
-    numFeatures = keypoints_frame->size();
-#ifdef PERFORMANCE_EVAL
-    if (keypoints_frame->size() > MAX_KEYPOINTS) {
-        keypoints_frame->resize(MAX_KEYPOINTS);
-    }
-#endif    
-    detector_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
-    //printf("execution time = %dms\n", (int) (t * 1000. / cv::getTickFrequency()));
-    if (SHOW_ORB_vs_iGRaND) {
-        if (name.compare("ORB") == 0) {
-            cv::Scalar red(0, 0, 255); // BGR order
-            draw2DKeyPoints(frame_vis, *keypoints_frame, red);
-            //cv::imwrite(keyframe_frameid_str + "_" + name + "_keypoints.png", frame_vis);
-            cv::imshow("ORB Feature Detections (red)", frame_vis); // Show our image inside it.
-            cv::waitKey(3);
-        } else if (name.compare("iGRAND") == 0) {
-            cv::Scalar green(0, 255, 0); // BGR order            
-            draw2DKeyPoints(frame_vis, *keypoints_frame, green);
-            cv::imwrite(keyframe_frameid_str + "_" + name + "_keypoints.png", frame_vis);
-            cv::imshow("iGRaND Feature Detections (green)", frame_vis); // Show our image inside it.
-            cv::waitKey(3);
-        }
-        //cv::imshow("Feature Detections (red)", frame_vis); // Show our image inside it.
-        //cv::waitKey(3);
-    }
 
+    numFeatures = computeKeypointsAndDescriptors(frame, dimg, mask,
+            name, detector_, extractor_,
+            keypoints_frame, descriptors_frame,
+            detector_time, descriptor_time, keyframe_frameid_str);
+
+    if (keypoints_frame->size() < 10) {
+        printf("Too few keypoints! Bailing on image...");
+        bad_frames++;
+        if (bad_frames > 2) {
+            printf(" and Re-initializing the estimator.");
+            prior_descriptors_.release();
+        }
+        return false;
+    }
+    
+    // put each detected keypoint into a PCL point cloud object
     if (!COMPUTE_PTCLOUDS) {
         int i = 0;
         std::cout << "Found " << keypoints_frame->size() << " key points in frame." << std::endl;
@@ -264,30 +373,16 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
             pcl_ptcloud_sptr->push_back(pt);
             if (std::isnan(kpt.pt.x) || std::isnan(kpt.pt.y) ||
                     std::isnan(pt.x) || std::isnan(pt.y) || std::isnan(pt.z)) {
-                ROS_INFO("%d : 2d (x,y)=(%f,%f)  mask(x,y)=%d (x,y,z)=(%f,%f,%f)\n",
+                printf("%d : 2d (x,y)=(%f,%f)  mask(x,y)=%d (x,y,z)=(%f,%f,%f)\n",
                         i++, kpt.pt.x, kpt.pt.y,
                         mask.getMat(cv::ACCESS_READ).data[offset],
                         pt.x, pt.y, pt.z);
             }
         }
     }
-    if (keypoints_frame->size() < 10) {
-        ROS_DEBUG("Too few keypoints! Bailing on image...");
-        bad_frames++;
-        if (bad_frames > 2) {
-            ROS_DEBUG(" and Re-initializing the estimator.");
-            prior_descriptors_.release();
-        }
-        return false;
-    }
-    if (cv::iGRAND * iGRAND_extractor = extractor_.dynamicCast<cv::iGRAND>()) {
-        iGRAND_extractor->setDepthImage(&dimg);
-    }
-    t = (double) cv::getTickCount();
-    extractor_->compute(frame, *keypoints_frame, *descriptors_frame);
-    descriptor_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
+
     match_time = 0;
-    t = (double) cv::getTickCount();
+    double t = (double) cv::getTickCount();
     //    if (!prior_descriptors_ || prior_descriptors_.size() < 6) {
     if (!prior_descriptors_ || prior_descriptors_->empty()) {
         return false;
@@ -306,10 +401,10 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
     match_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
     numMatches = good_matches.size();
     if (good_matches.size() < 6) {
-        ROS_DEBUG("Too few key point matches in the images! Bailing on image...");
+        printf("Too few key point matches in the images! Bailing on image...");
         bad_frames++;
         if (bad_frames > 2) {
-            ROS_DEBUG(" and Re-initializing the estimator.");
+            printf(" and Re-initializing the estimator.");
             prior_descriptors_.release();
         }
         return false;
@@ -340,8 +435,8 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
             cv::imshow("Display window", matchImage); // Show our image inside it.
             cv::waitKey(3);
             //cv::imwrite(keyframe_frameid_str + "_matches.png", matchImage);
-        } catch (cv_bridge::Exception& e) {
-            ROS_ERROR("cv_bridge exception: %s", e.what());
+        } catch (cv::Exception& e) {
+            printf("opencv exception: %s", e.what());
             return false;
         }
     }
@@ -363,7 +458,7 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
                 point2d_frame.x > pcl_ptcloud_sptr->width ||
                 point2d_frame.y > pcl_ptcloud_sptr->height)) {
 
-            ROS_INFO("Frame coord out of range for index pair (%d,%d) ! (x,y)=(%f,%f) (width,height)=(%d,%d)",
+            printf("Frame coord out of range for index pair (%d,%d) ! (x,y)=(%f,%f) (width,height)=(%d,%d)",
                     good_matches[match_index].trainIdx, good_matches[match_index].queryIdx,
                     point2d_frame.x, point2d_frame.y,
                     pcl_ptcloud_sptr->width, pcl_ptcloud_sptr->height);
@@ -412,10 +507,10 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
     pcl::CorrespondencesPtr ptcloud_matches_ransac(new pcl::Correspondences());
     ransac_rejector->getRemainingCorrespondences(*ptcloud_matches, *ptcloud_matches_ransac);
     if (ptcloud_matches_ransac->size() < 2) {
-        ROS_DEBUG("Too few inliers from RANSAC transform estimation! Bailing on image...");
+        printf("Too few inliers from RANSAC transform estimation! Bailing on image...");
         bad_frames++;
         if (bad_frames > 2) {
-            ROS_DEBUG(" and Re-initializing the estimator.");
+            printf(" and Re-initializing the estimator.");
             prior_descriptors_.release();
         }
         return false;
@@ -486,7 +581,7 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
     double unit_scaling = 1;
     float constant_x = unit_scaling / rgbCamera_Kmatrix.at<float>(0, 0);
     float constant_y = unit_scaling / rgbCamera_Kmatrix.at<float>(1, 1);
-    
+
     for (int trials = 0; trials < MAX_TRIALS; trials++) {
         for (correspondenceIterator = ptcloud_matches_ransac->begin();
                 correspondenceIterator != ptcloud_matches_ransac->end();
@@ -572,8 +667,8 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
             cv::imwrite(keyframe_frameid_str + ".png", frame_vis);
             cv::imwrite(keyframe_frameid_str + "_depth.png", depth_frame);
             cv::imwrite(keyframe_frameid_str + "_mask.png", mask);
-        } catch (cv_bridge::Exception& e) {
-            ROS_ERROR("cv_bridge exception: %s", e.what());
+        } catch (cv::Exception& e) {
+            printf("cv_bridge exception: %s", e.what());
             return true;
         }
     }

@@ -44,14 +44,6 @@
 
 #include <eigen_conversions/eigen_msg.h>
 
-bool LOG_ODOMETRY_TO_FILE = false;
-
-// Odometry performance data logging variables
-static std::string _logfilename("/home/arwillis/odom_transforms_noisy.m");
-static std::ofstream fos;
-static int StreamPrecision = 8;
-static Eigen::IOFormat OctaveFmt(StreamPrecision, 0, ", ", ";\n", "", "", "[", "]");
-
 void toString(pcl::PointXYZRGB& ptrgb) {
     ROS_INFO("x,y,z=(%f,%f,%f) r,g,b=(%d,%d,%d)",
             ptrgb.x, ptrgb.y, ptrgb.z,
@@ -61,6 +53,8 @@ void toString(pcl::PointXYZRGB& ptrgb) {
 void logInitialTransformData(std::string frameid, ros::Time frame_time,
         Eigen::Quaternionf quat, Eigen::Vector3f trans,
         Eigen::Matrix4f transform) {
+    static int StreamPrecision = 8;
+    static Eigen::IOFormat OctaveFmt(StreamPrecision, 0, ", ", ";\n", "", "", "[", "]");
     if (!fos) {
         std::cout << "Opening logfile " << _logfilename << "." << std::endl;
         fos.open(_logfilename.c_str());
@@ -74,58 +68,6 @@ void logInitialTransformData(std::string frameid, ros::Time frame_time,
     fos << trans.x() << " " << trans.y() << " " << trans.z() << "];" << std::endl;
     fos << "rgbd_odometry_init.transform = ";
     fos << transform.format(OctaveFmt) << ";" << std::endl;
-}
-
-void logTransformData(std::string& frameid, ros::Time& frame_time,
-        std::string& detector, std::string& descriptor,
-        float detectorTime, float descriptorTime, float matchTime, float RANSACTime, float covarianceTime,
-        int numFeatures, int numMatches, int numInliers,
-        Eigen::Quaternionf& quat, Eigen::Vector3f& trans,
-        Eigen::Matrix4f& transform, Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix,
-        std::vector<Eigen::Matrix4f>& transform_vector) {
-    static int elementIdx = 1;
-    if (transform_vector.size() < 1 || frameid.size() < 1)
-        return;
-    try {
-        if (!fos) {
-            std::cout << "Opening logfile " << _logfilename << "." << std::endl;
-            fos.open(_logfilename.c_str());
-        }
-        Eigen::Matrix4f curr_transform;
-        std::vector<Eigen::Matrix4f>::iterator poseIterator;
-        fos << "rgbd_odometry{" << elementIdx << "}.frame_id = '" << frameid << "';" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.sec = " << frame_time.sec << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.nsec = " << frame_time.nsec << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.detector = '" << detector << "';" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.descriptor = '" << descriptor << "';" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.detectorTime = " << detectorTime << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.descriptorTime = " << descriptorTime << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.matchTime = " << matchTime << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.RANSACTime = " << RANSACTime << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.covarianceTime = " << covarianceTime << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.numFeatures = " << numFeatures << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.numMatches = " << numMatches << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.numInliers = " << numInliers << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.quaternion = [";
-        fos << quat.x() << " " << quat.y() << " " << quat.z() << " " << quat.w() << "];" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.translation = [";
-        fos << trans.x() << " " << trans.y() << " " << trans.z() << "];" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.transform = ";
-        fos << transform.format(OctaveFmt) << ";" << std::endl;
-        fos << "rgbd_odometry{" << elementIdx << "}.covMatrix = ";
-        fos << covMatrix.format(OctaveFmt) << ";" << std::endl;
-        //        fos << "rgbd_odometry{" << elementIdx << "}.noisy_transforms = [ " << std::endl;
-        //        for (poseIterator = transform_vector.begin();
-        //                poseIterator != transform_vector.end(); ++poseIterator) {
-        //            curr_transform = *poseIterator;
-        //            fos << curr_transform.format(OctaveFmt) << ";" << std::endl;
-        //        }
-        //        fos << "];" << std::endl;
-        elementIdx++;
-    } catch (...) {
-        ROS_ERROR("error writing to noisy transform log file.");
-        return;
-    }
 }
 
 namespace Eigen {
@@ -172,9 +114,9 @@ void RGBDOdometryEngine::tf_truth_Callback(const geometry_msgs::TransformStamped
     tf::Quaternion quaternion;
     translation = calib_marker_pose.getOrigin();
     quaternion = calib_marker_pose.getRotation();
-    
+
     tf::Vector3 tval(translation.x(), translation.y(), translation.z());
-    tf::Quaternion qval(quaternion.x(), quaternion.y(), 
+    tf::Quaternion qval(quaternion.x(), quaternion.y(),
             quaternion.z(), quaternion.w());
     qval = qval.normalize();
     tf::Transform initialTransform(qval, tval);
@@ -186,7 +128,7 @@ void RGBDOdometryEngine::tf_truth_Callback(const geometry_msgs::TransformStamped
     //    std::cout << "rotation = " << tf_truth->transform.rotation << std::endl
     //            << "translation = " << tf_truth->transform.translation << std::endl;
     if (tf_truth->header.stamp.sec - first_tf->header.stamp.sec > tf_truth_init_time) {
-        initializationDone = true; 
+        initializationDone = true;
         std::cout << "Initialization time has expired." << std::endl;
         std::cout << " Setting ground truth transform to: " << std::endl
                 << "rotation = (" << qval.getX() << ", " << qval.getY()
@@ -363,12 +305,12 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         transform_vector.clear();
 
         //std::cout << "Detector = " << detectorStr << " Descriptor = " << descriptorStr << std::endl;
-            odomEstimatorSuccess = computeRelativePose(rmatcher->detectorStr,
-                    rmatcher->detector_, rmatcher->extractor_, trans, covMatrix,
-                    depthimg, frame, keypoints_frame, descriptors_frame, 
-                    transform_vector,
-                    detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
-                    numFeatures, numMatches, numInliers);
+        odomEstimatorSuccess = computeRelativePose(rmatcher->detectorStr,
+                rmatcher->detector_, rmatcher->extractor_, trans, covMatrix,
+                depthimg, frame, keypoints_frame, descriptors_frame,
+                transform_vector,
+                detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+                numFeatures, numMatches, numInliers);
 
 #ifdef PERFORMANCE_EVAL
         vec_prior_keypoints[pairIdx] = keypoints_frame;
@@ -384,14 +326,14 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         }
         Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
         Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
-        if (LOG_ODOMETRY_TO_FILE) {
-            logTransformData(keyframe_frameid_str, frame_time,
-                    rmatcher->detectorStr, rmatcher->descriptorStr,
-                    detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
-                    numFeatures, numMatches, numInliers,
-                    quat, translation,
-                    trans, covMatrix, transform_vector);
-        }
+//        if (LOG_ODOMETRY_TO_FILE) {
+//            logTransformData(keyframe_frameid_str, frame_time,
+//                    rmatcher->detectorStr, rmatcher->descriptorStr,
+//                    detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+//                    numFeatures, numMatches, numInliers,
+//                    quat, translation,
+//                    trans, covMatrix, transform_vector);
+//        }
 
         if (pairIdx == trackedIdx && initializationDone) {
             tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
@@ -430,7 +372,7 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
             odom_w_cov_msg.header.stamp = frame_time;
             odom_w_cov_msg.header.frame_id = keyframe_frameid_str;
             pubOdom_w_cov.publish(odom_w_cov_msg);
-                        
+
             // publish current estimated pose to tf and update current pose estimate
             changePose(xform);
 

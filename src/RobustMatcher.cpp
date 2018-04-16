@@ -5,10 +5,11 @@
  *      Author: eriba
  */
 
-#include <rgbd_odometry/RobustMatcher.h>
 #include <time.h>
 
 #include <opencv2/features2d/features2d.hpp>
+
+#include <rgbd_odometry/RobustMatcher.h>
 
 RobustMatcher::~RobustMatcher() {
     // TODO Auto-generated destructor stub

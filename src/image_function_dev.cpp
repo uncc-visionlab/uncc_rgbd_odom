@@ -5,7 +5,7 @@
 
 // ROS includes
 #include <ros/ros.h>
-#include <cv_bridge/cv_bridge.h>
+//#include <cv_bridge/cv_bridge.h>
 
 // OpenCV includes
 #include <opencv2/core/core.hpp>
@@ -373,8 +373,8 @@ void ImageFunctionProvider::_cpu_ditherDepthAndSmooth(cv::Mat src, cv::Mat dst,
 //        cv::imwrite(keyframe_frameid_str + "_dither.png", ditherm);
 //        cv::imwrite(keyframe_frameid_str + "_idepth.png", 5*(dst + 10));
         //        cv::imwrite(keyframe_frameid_str + "_dIdy.png", dIdy_umat);
-    } catch (cv_bridge::Exception& e) {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
+    } catch (cv::Exception& e) {
+        printf("cv_bridge exception: %s", e.what());
         return;
     }
 }
@@ -555,8 +555,8 @@ void ImageFunctionProvider::_cpu_movingAvgFilter(cv::Mat src, cv::Mat dst,
 //        cv::imwrite(keyframe_frameid_str + "_dither.png", ditherm);
 //        cv::imwrite(keyframe_frameid_str + "_idepth.png", 5*(dst + 10));
         //        cv::imwrite(keyframe_frameid_str + "_dIdy.png", dIdy_umat);
-    } catch (cv_bridge::Exception& e) {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
+    } catch (cv::Exception& e) {
+        printf("cv_bridge exception: %s", e.what());
         return;
     }
 }

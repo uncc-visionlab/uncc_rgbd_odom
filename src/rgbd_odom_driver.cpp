@@ -248,14 +248,14 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
     frame_time = depth_msg->header.stamp;
     std::string keyframe_frameid_str("frame_");
     keyframe_frameid_str.append(stdpatch::to_string(frame_id++));
-    if (COMPUTE_PTCLOUDS) {
-        ptcloud_sptr.reset(new sensor_msgs::PointCloud2);
-        depth_image_proc::PointCloudXyzrgbNodelet nodelet(ptcloud_sptr);
-        nodelet.imageCb(depth_msg, rgb_msg_in, info_msg);
-        pcl_ptcloud_sptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
-        pcl::fromROSMsg(*ptcloud_sptr, *pcl_ptcloud_sptr);
-        ROS_DEBUG("PCL point cloud computed for frame %d.", frame_id);
-    }
+    //    if (COMPUTE_PTCLOUDS) {
+    //        ptcloud_sptr.reset(new sensor_msgs::PointCloud2);
+    //        depth_image_proc::PointCloudXyzrgbNodelet nodelet(ptcloud_sptr);
+    //        nodelet.imageCb(depth_msg, rgb_msg_in, info_msg);
+    //        pcl_ptcloud_sptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
+    //        pcl::fromROSMsg(*ptcloud_sptr, *pcl_ptcloud_sptr);
+    //        ROS_DEBUG("PCL point cloud computed for frame %d.", frame_id);
+    //    }
     depth_encoding = depth_msg->encoding;
     cv_rgbimg_ptr = cv_bridge::toCvShare(rgb_msg_in, sensor_msgs::image_encodings::BGR8);
     if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1) {
@@ -281,10 +281,6 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
     bool odomEstimatorSuccess;
     float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
     std::vector<Eigen::Matrix4f> transform_vector;
-#ifndef PERFORMANCE_EVAL
-    cv::Ptr<std::vector<cv::KeyPoint> > keypoints_frame(new std::vector<cv::KeyPoint>);
-    cv::Ptr<cv::UMat> descriptors_frame(new cv::UMat);
-#endif
     for (int pairIdx = 0; pairIdx < NUM_TESTS; pairIdx++) {
 #ifdef PERFORMANCE_EVAL
         std::string detectorStr = odomAlgorithmPairs[pairIdx][0];
@@ -305,35 +301,25 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         transform_vector.clear();
 
         //std::cout << "Detector = " << detectorStr << " Descriptor = " << descriptorStr << std::endl;
-        odomEstimatorSuccess = computeRelativePose(rmatcher->detectorStr,
-                rmatcher->detector_, rmatcher->extractor_, trans, covMatrix,
-                depthimg, frame, keypoints_frame, descriptors_frame,
+        odomEstimatorSuccess = computeRelativePose(frame, depthimg,
+                trans, covMatrix,
                 transform_vector,
                 detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
                 numFeatures, numMatches, numInliers);
 
-#ifdef PERFORMANCE_EVAL
-        vec_prior_keypoints[pairIdx] = keypoints_frame;
-        vec_prior_descriptors_[pairIdx] = descriptors_frame;
-        vec_prior_ptcloud_sptr_[pairIdx] = pcl_ptcloud_sptr;
-#else
-        prior_keypoints = keypoints_frame;
-        prior_descriptors_ = descriptors_frame;
-        prior_ptcloud_sptr = pcl_ptcloud_sptr;
-#endif
         if (!odomEstimatorSuccess) {
             return;
         }
         Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
         Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
-//        if (LOG_ODOMETRY_TO_FILE) {
-//            logTransformData(keyframe_frameid_str, frame_time,
-//                    rmatcher->detectorStr, rmatcher->descriptorStr,
-//                    detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
-//                    numFeatures, numMatches, numInliers,
-//                    quat, translation,
-//                    trans, covMatrix, transform_vector);
-//        }
+        //        if (LOG_ODOMETRY_TO_FILE) {
+        //            logTransformData(keyframe_frameid_str, frame_time,
+        //                    rmatcher->detectorStr, rmatcher->descriptorStr,
+        //                    detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+        //                    numFeatures, numMatches, numInliers,
+        //                    quat, translation,
+        //                    trans, covMatrix, transform_vector);
+        //        }
 
         if (pairIdx == trackedIdx && initializationDone) {
             tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());

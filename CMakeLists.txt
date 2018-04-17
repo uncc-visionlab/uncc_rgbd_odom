@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 # this line sets the value of the ${PROJECT_NAME} variable
 project(uncc_rgbd_odom)
-subdirs(core)
+#subdirs(core)
 # uncomment this if cmake is not finding your packages
 # to view the paths searched and decisions made by cmake
 set( CMAKE_FIND_DEBUG_MODE 1 )

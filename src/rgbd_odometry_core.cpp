@@ -12,13 +12,6 @@
 
 #include <rgbd_odometry/rgbd_odometry_core.h>
 
-bool DUMP_MATCH_IMAGES = false;
-bool DUMP_RAW_IMAGES = false;
-bool SHOW_ORB_vs_iGRaND = false;
-
-#define IMAGE_MASK_MARGIN 20
-//#define PERFORMANCE_EVAL false
-
 int toIndex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, int column, int row) {
     return row * cloud->width + column;
 }
@@ -151,16 +144,12 @@ bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg) {
     transform_vector.clear();
 
     //std::cout << "Detector = " << detectorStr << " Descriptor = " << descriptorStr << std::endl;
-    odomEstimatorSuccess = computeRelativePose(rmatcher->detectorStr,
-            rmatcher->detector_, rmatcher->extractor_, trans, covMatrix,
-            depthimg, frame, keypoints_frame, descriptors_frame,
+    odomEstimatorSuccess = computeRelativePose(frame, depthimg,
+            trans, covMatrix,
             transform_vector,
             detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
             numFeatures, numMatches, numInliers);
 
-    prior_keypoints = keypoints_frame;
-    prior_descriptors_ = descriptors_frame;
-    prior_ptcloud_sptr = pcl_ptcloud_sptr;
     if (!odomEstimatorSuccess) {
         return false;
     }
@@ -175,7 +164,6 @@ bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg) {
                 trans, covMatrix, transform_vector);
     }
     //prior_keyframe_frameid_str = keyframe_frameid_str;
-    prior_image = frame.clone();
 }
 
 int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& dimg, cv::UMat& mask,
@@ -348,19 +336,21 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
     return true;
 }
 
-bool RGBDOdometryCore::computeRelativePose(std::string& name,
-        cv::Ptr<cv::FeatureDetector> detector_,
-        cv::Ptr<cv::DescriptorExtractor> extractor_,
+bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         Eigen::Matrix4f& trans,
         Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
-        cv::UMat& depthimg,
-        cv::UMat& frame,
-        cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
-        cv::Ptr<cv::UMat>& descriptors_frame,
         std::vector<Eigen::Matrix4f>& transform_vector,
         float& detector_time, float& descriptor_time, float& match_time,
         float& RANSAC_time, float& covarianceTime,
         int& numFeatures, int& numMatches, int& numInliers) {
+    if (!hasRGBCameraIntrinsics()) {
+        std::cout << "Camera calibration parameters are not set. Odometry cannot be estimated." << std::endl;
+        return false;
+    }
+    if (!hasMatcher()) {
+        std::cout << "Feature detector, descriptor and matching algorithms not set. Odometry cannot be estimated." << std::endl;
+        return false;
+    }
     static int bad_frames = 0;
     std::string keyframe_frameid_str = "";
     cv::UMat depth_frame;
@@ -399,7 +389,6 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
 
     // Preprocess: Smooth or Dither the Depth measurements to reduce noise
     // Output: depth_frame -- smoothed image
-    cv::Mat filtered_depth;
     cv::UMat smoothed_depth_frame;
     switch (depth_processing) {
         case Depth_Processing::MOVING_AVERAGE:
@@ -422,8 +411,10 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
     //             (x,y) location
     // Output: keypoints_frame   -- keypoint (x,y) locations
     //         descriptors_frame -- descriptor values 
+    keypoints_frame.reset(new std::vector<cv::KeyPoint>);
+    descriptors_frame.reset(new cv::UMat);
     numFeatures = computeKeypointsAndDescriptors(frame, dimg, mask,
-            name, detector_, extractor_,
+            rmatcher->detectorStr, rmatcher->detector_, rmatcher->extractor_,
             keypoints_frame, descriptors_frame,
             detector_time, descriptor_time, keyframe_frameid_str);
 
@@ -440,41 +431,42 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
 
     // Step 1: Create a PCL point cloud object from newly detected feature points having matches/correspondence
     // Output: pcl_ptcloud_sptr -- a 3D point cloud of the 3D surface locations at all detected keypoints
-    if (!COMPUTE_PTCLOUDS) {
-        int i = 0;
-        std::cout << "Found " << keypoints_frame->size() << " key points in frame." << std::endl;
-        std::vector<cv::KeyPoint>::iterator keyptIterator;
-        for (keyptIterator = keypoints_frame->begin();
-                keyptIterator != keypoints_frame->end(); /*++keyptIterator*/) {
-            cv::KeyPoint kpt = *keyptIterator;
-            int offset = (round(kpt.pt.y) * depth_frame.cols + round(kpt.pt.x));
-            if (((int) mask.getMat(cv::ACCESS_READ).data[offset]) == 0) {
-                //float depth = ((float *) depth_frame.getMat(cv::ACCESS_READ).data)[offset];
-                //                std::cout << "mask = " << ((int) mask.getMat(cv::ACCESS_READ).data[offset])
-                //                        << " depth = " << depth << std::endl;
-                // key point found that lies in/too close to the masked region!!
-                keyptIterator = keypoints_frame->erase(keyptIterator);
-                continue;
-            } else {
-                ++keyptIterator;
-            }
-            pcl::PointXYZRGB pt;
-            pt = convertRGBD2XYZ(kpt.pt, frame.getMat(cv::ACCESS_READ),
-                    dimg, rgbCamera_Kmatrix);
-            //std::cout << "Added point (" << pt.x << ", " << pt.y << ", " << pt.z << ")" << std::endl;
-            pcl_ptcloud_sptr->push_back(pt);
-            if (std::isnan(kpt.pt.x) || std::isnan(kpt.pt.y) ||
-                    std::isnan(pt.x) || std::isnan(pt.y) || std::isnan(pt.z)) {
-                printf("%d : 2d (x,y)=(%f,%f)  mask(x,y)=%d (x,y,z)=(%f,%f,%f)\n",
-                        i++, kpt.pt.x, kpt.pt.y,
-                        mask.getMat(cv::ACCESS_READ).data[offset],
-                        pt.x, pt.y, pt.z);
-            }
+    //if (!COMPUTE_PTCLOUDS) {
+    int i = 0;
+    std::cout << "Found " << keypoints_frame->size() << " key points in frame." << std::endl;
+    std::vector<cv::KeyPoint>::iterator keyptIterator;
+    for (keyptIterator = keypoints_frame->begin();
+            keyptIterator != keypoints_frame->end(); /*++keyptIterator*/) {
+        cv::KeyPoint kpt = *keyptIterator;
+        int offset = (round(kpt.pt.y) * depth_frame.cols + round(kpt.pt.x));
+        if (((int) mask.getMat(cv::ACCESS_READ).data[offset]) == 0) {
+            //float depth = ((float *) depth_frame.getMat(cv::ACCESS_READ).data)[offset];
+            //                std::cout << "mask = " << ((int) mask.getMat(cv::ACCESS_READ).data[offset])
+            //                        << " depth = " << depth << std::endl;
+            // key point found that lies in/too close to the masked region!!
+            keyptIterator = keypoints_frame->erase(keyptIterator);
+            continue;
+        } else {
+            ++keyptIterator;
+        }
+        pcl::PointXYZRGB pt;
+        pt = convertRGBD2XYZ(kpt.pt, frame.getMat(cv::ACCESS_READ),
+                dimg, rgbCamera_Kmatrix);
+        //std::cout << "Added point (" << pt.x << ", " << pt.y << ", " << pt.z << ")" << std::endl;
+        pcl_ptcloud_sptr->push_back(pt);
+        if (std::isnan(kpt.pt.x) || std::isnan(kpt.pt.y) ||
+                std::isnan(pt.x) || std::isnan(pt.y) || std::isnan(pt.z)) {
+            printf("%d : 2d (x,y)=(%f,%f)  mask(x,y)=%d (x,y,z)=(%f,%f,%f)\n",
+                    i++, kpt.pt.x, kpt.pt.y,
+                    mask.getMat(cv::ACCESS_READ).data[offset],
+                    pt.x, pt.y, pt.z);
         }
     }
+    //}
 
     // Preprocess: Stop execution if a prior keypoints, descriptors and point cloud not available
     if (!prior_descriptors_ || prior_descriptors_->empty()) {
+        prior_image = frame.clone();
         prior_keypoints = keypoints_frame;
         prior_descriptors_ = descriptors_frame;
         prior_ptcloud_sptr = pcl_ptcloud_sptr;
@@ -567,18 +559,18 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
                     point2d_frame.x, point2d_frame.y,
                     pcl_ptcloud_sptr->width, pcl_ptcloud_sptr->height);
         }
-        if (COMPUTE_PTCLOUDS) {
-            pcl::Correspondence correspondence(toIndex(pcl_ptcloud_sptr, point2d_frame.x, point2d_frame.y),
-                    toIndex(prior_ptcloud_sptr, point2d_prior.x, point2d_prior.y),
-                    good_matches[match_index].distance);
-            ptcloud_matches->push_back(correspondence);
-        } else {
-            // std::cout << "distance " << good_matches[match_index].distance << std::endl;
-            pcl::Correspondence correspondence(good_matches[match_index].trainIdx,
-                    good_matches[match_index].queryIdx,
-                    good_matches[match_index].distance);
-            ptcloud_matches->push_back(correspondence);
-        }
+        //        if (COMPUTE_PTCLOUDS) {
+        //            pcl::Correspondence correspondence(toIndex(pcl_ptcloud_sptr, point2d_frame.x, point2d_frame.y),
+        //                    toIndex(prior_ptcloud_sptr, point2d_prior.x, point2d_prior.y),
+        //                    good_matches[match_index].distance);
+        //            ptcloud_matches->push_back(correspondence);
+        //        } else {
+        // std::cout << "distance " << good_matches[match_index].distance << std::endl;
+        pcl::Correspondence correspondence(good_matches[match_index].trainIdx,
+                good_matches[match_index].queryIdx,
+                good_matches[match_index].distance);
+        ptcloud_matches->push_back(correspondence);
+        //        }
     }
 
 #if (DEBUG==true)
@@ -638,6 +630,7 @@ bool RGBDOdometryCore::computeRelativePose(std::string& name,
 
     // Post-process: Save keypoints, descriptors and point cloud of current frame
     //               as the new prior frame.
+    prior_image = frame.clone();
     prior_keypoints = keypoints_frame;
     prior_descriptors_ = descriptors_frame;
     prior_ptcloud_sptr = pcl_ptcloud_sptr;

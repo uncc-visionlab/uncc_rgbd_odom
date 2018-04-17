@@ -49,13 +49,8 @@
 static std::string _logfilename("/home/arwillis/odom_transforms_noisy.m");
 static std::ofstream fos;
 
-//#ifdef OPENCV3
-//static cv::UMat prior_image;
-//static cv::Ptr<cv::UMat> prior_descriptors_;
-//#else
-//static cv::Mat prior_image;
-//static cv::Ptr<cv::Mat> prior_descriptors_;
-//#endif
+//#define IMAGE_MASK_MARGIN 20
+//#define PERFORMANCE_EVAL false
 
 enum Depth_Processing {
     NONE, MOVING_AVERAGE, DITHER
@@ -68,8 +63,11 @@ public:
     RGBDOdometryCore() :
     imageFunctionProvider(new ImageFunctionProvider),
     pcl_ptcloud_sptr(new pcl::PointCloud<pcl::PointXYZRGB>),
-    LOG_ODOMETRY_TO_FILE(false),
-    COMPUTE_PTCLOUDS(false),
+    LOG_ODOMETRY_TO_FILE(false),    
+    //COMPUTE_PTCLOUDS(false),
+    DUMP_MATCH_IMAGES(false),
+    DUMP_RAW_IMAGES(false),
+    SHOW_ORB_vs_iGRaND(false),
     fast_match(false),
     rmatcher(new RobustMatcher()),
     numKeyPoints(600) {
@@ -77,39 +75,24 @@ public:
         useOpenCL = false;
         std::string opencl_path = ".";
         std::string depthmask_cl = "depthmask.cl";
+        getImageFunctionProvider()->initialize(useOpenCL, opencl_path, depthmask_cl);
+
         std::string feature_detector = "ORB";
         std::string feature_descriptor = "ORB";
-        std::string depth_processing_str = "none";
-
-        getImageFunctionProvider()->initialize(useOpenCL, opencl_path, depthmask_cl);
         rmatcher->setFeatureDetector(feature_detector);
         rmatcher->setDescriptorExtractor(feature_descriptor);
 
-        if (depth_processing_str.compare("moving_average") == 0) {
-            std::cout << "Applying moving average depth filter." << std::endl;
-            this->depth_processing = Depth_Processing::MOVING_AVERAGE;
-        } else if (depth_processing_str.compare("dither") == 0) {
-            std::cout << "Applying dithering depth filter." << std::endl;
-            this->depth_processing = Depth_Processing::DITHER;
-        } else {
-            this->depth_processing = Depth_Processing::NONE;
-        }
+        std::string depth_processing_str = "none";
+        setDepthProcessing(depth_processing_str);
     }
 
     virtual ~RGBDOdometryCore() {
     }
 
-    RobustMatcher::Ptr getMatcher() {
-        return rmatcher;
-    }
-
-    bool computeRelativePose(std::string& name, cv::Ptr<cv::FeatureDetector> detector_,
-            cv::Ptr<cv::DescriptorExtractor> extractor_, Eigen::Matrix4f& trans,
-            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
+    bool computeRelativePose(cv::UMat& frame,
             cv::UMat& depthimg,
-            cv::UMat& frame,
-            cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
-            cv::Ptr<cv::UMat>& descriptors_frame,
+            Eigen::Matrix4f& trans,
+            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
             std::vector<Eigen::Matrix4f>& transform_vector,
             float& detector_time, float& descriptor_time, float& match_time,
             float& RANSAC_time, float& covarianceTime,
@@ -136,8 +119,40 @@ public:
         return imageFunctionProvider;
     }
 
+    bool hasRGBCameraIntrinsics() {
+        return rgbCamera_Kmatrix.rows == 3 && rgbCamera_Kmatrix.cols == 3;
+    }
+
     void setRGBCameraIntrinsics(cv::Mat matrix) {
         rgbCamera_Kmatrix = matrix.clone();
+    }
+
+    cv::Mat getRGBCameraIntrinsics() {
+        return rgbCamera_Kmatrix.clone();
+    }
+
+    bool hasMatcher() {
+        return rmatcher && rmatcher->detector_ && rmatcher->extractor_;
+    }
+
+    void setMatcher(RobustMatcher::Ptr rm) {
+        rmatcher = rm;
+    }
+
+    RobustMatcher::Ptr getMatcher() {
+        return rmatcher;
+    }
+
+    void setDepthProcessing(std::string depth_processing_str) {
+        if (depth_processing_str.compare("moving_average") == 0) {
+            std::cout << "Applying moving average depth filter." << std::endl;
+            depth_processing = Depth_Processing::MOVING_AVERAGE;
+        } else if (depth_processing_str.compare("dither") == 0) {
+            std::cout << "Applying dithering depth filter." << std::endl;
+            depth_processing = Depth_Processing::DITHER;
+        } else {
+            depth_processing = Depth_Processing::NONE;
+        }
     }
 
 private:
@@ -147,16 +162,17 @@ private:
     // -------------------------
     RGBDOdometryCore(const RGBDOdometryCore & yRef);
     RGBDOdometryCore& operator=(const RGBDOdometryCore & yRef);
+
 protected:
     bool LOG_ODOMETRY_TO_FILE;
-    bool COMPUTE_PTCLOUDS;
+    //bool COMPUTE_PTCLOUDS;
+    bool DUMP_MATCH_IMAGES;
+    bool DUMP_RAW_IMAGES;
+    bool SHOW_ORB_vs_iGRaND;
 
     cv::Mat rgbCamera_Kmatrix;
-
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_ptcloud_sptr;
 
-    cv::Ptr<std::vector<cv::KeyPoint> > prior_keypoints;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr prior_ptcloud_sptr;
     //std::string prior_keyframe_frameid_str;
     bool fast_match;
     int numKeyPoints;
@@ -168,8 +184,14 @@ protected:
     // class to provide depth image processing functions
     Depth_Processing depth_processing;
 
+
+    cv::Ptr<std::vector<cv::KeyPoint> > keypoints_frame;
+    cv::Ptr<cv::UMat> descriptors_frame;
+
     cv::UMat prior_image;
+    cv::Ptr<std::vector<cv::KeyPoint> > prior_keypoints;
     cv::Ptr<cv::UMat> prior_descriptors_;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr prior_ptcloud_sptr;
 };
 
 #endif /* RGBD_ODOMETRY_CORE_HPP */

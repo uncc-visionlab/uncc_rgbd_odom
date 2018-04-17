@@ -278,7 +278,6 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
 
     bool odomEstimatorSuccess;
     float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
-    std::vector<Eigen::Matrix4f> transform_vector;
     for (int pairIdx = 0; pairIdx < NUM_TESTS; pairIdx++) {
 #ifdef PERFORMANCE_EVAL
         std::string detectorStr = odomAlgorithmPairs[pairIdx][0];
@@ -296,12 +295,10 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
         Eigen::Matrix4f trans;
         int numFeatures = 0, numMatches = 0, numInliers = 0;
-        transform_vector.clear();
 
         //std::cout << "Detector = " << detectorStr << " Descriptor = " << descriptorStr << std::endl;
         odomEstimatorSuccess = computeRelativePose(frame, depthimg,
                 trans, covMatrix,
-                transform_vector,
                 detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
                 numFeatures, numMatches, numInliers);
 
@@ -365,8 +362,6 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         }
     }
     prior_keyframe_frameid_str = keyframe_frameid_str;
-    prior_image = frame.clone();
-
 }
 
 void RGBDOdometryEngine::initializeSubscribersAndPublishers() {

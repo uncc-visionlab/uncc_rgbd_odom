@@ -63,7 +63,7 @@ public:
     RGBDOdometryCore() :
     imageFunctionProvider(new ImageFunctionProvider),
     pcl_ptcloud_sptr(new pcl::PointCloud<pcl::PointXYZRGB>),
-    LOG_ODOMETRY_TO_FILE(false),    
+    LOG_ODOMETRY_TO_FILE(false),
     //COMPUTE_PTCLOUDS(false),
     DUMP_MATCH_IMAGES(false),
     DUMP_RAW_IMAGES(false),
@@ -93,12 +93,13 @@ public:
             cv::UMat& depthimg,
             Eigen::Matrix4f& trans,
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
-            std::vector<Eigen::Matrix4f>& transform_vector,
             float& detector_time, float& descriptor_time, float& match_time,
             float& RANSAC_time, float& covarianceTime,
             int& numFeatures, int& numMatches, int& numInliers);
 
-    bool compute(cv::UMat &frame, cv::UMat &depthimg);
+    bool compute(cv::UMat &frame, cv::UMat &depthimg,
+            Eigen::Matrix4f& trans,
+            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
 
     int computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& dimg, cv::UMat& mask,
             std::string& name,
@@ -112,7 +113,6 @@ public:
             cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
             cv::Ptr<std::vector<cv::KeyPoint> >& prior_keypoints,
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
-            std::vector<Eigen::Matrix4f>& transform_vector,
             float &covarianceTime);
 
     ImageFunctionProvider::Ptr getImageFunctionProvider() {

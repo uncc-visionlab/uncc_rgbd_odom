@@ -80,8 +80,7 @@ void logTransformData(//std::string& frameid, ros::Time& frame_time,
         float detectorTime, float descriptorTime, float matchTime, float RANSACTime, float covarianceTime,
         int numFeatures, int numMatches, int numInliers,
         Eigen::Quaternionf& quat, Eigen::Vector3f& trans,
-        Eigen::Matrix4f& transform, Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix,
-        std::vector<Eigen::Matrix4f>& transform_vector) {
+        Eigen::Matrix4f& transform, Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix) {
     static int elementIdx = 1;
     static int StreamPrecision = 8;
     static Eigen::IOFormat OctaveFmt(StreamPrecision, 0, ", ", ";\n", "", "", "[", "]");
@@ -130,23 +129,13 @@ void logTransformData(//std::string& frameid, ros::Time& frame_time,
     }
 }
 
-bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg) {
-
-    bool odomEstimatorSuccess;
+bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg,
+        Eigen::Matrix4f& trans, Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix) {
     float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
-    std::vector<Eigen::Matrix4f> transform_vector;
-    cv::Ptr<std::vector<cv::KeyPoint> > keypoints_frame(new std::vector<cv::KeyPoint>);
-    cv::Ptr<cv::UMat> descriptors_frame(new cv::UMat);
-    double cov[36];
-    Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
-    Eigen::Matrix4f trans;
-    int numFeatures = 0, numMatches = 0, numInliers = 0;
-    transform_vector.clear();
+    int numFeatures, numMatches, numInliers;
 
-    //std::cout << "Detector = " << detectorStr << " Descriptor = " << descriptorStr << std::endl;
-    odomEstimatorSuccess = computeRelativePose(frame, depthimg,
+    bool odomEstimatorSuccess = computeRelativePose(frame, depthimg,
             trans, covMatrix,
-            transform_vector,
             detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
             numFeatures, numMatches, numInliers);
 
@@ -161,7 +150,7 @@ bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg) {
                 detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
                 numFeatures, numMatches, numInliers,
                 quat, translation,
-                trans, covMatrix, transform_vector);
+                trans, covMatrix);
     }
     //prior_keyframe_frameid_str = keyframe_frameid_str;
 }
@@ -224,7 +213,6 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
         cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
         cv::Ptr<std::vector<cv::KeyPoint> >& prior_keypoints,
         Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
-        std::vector<Eigen::Matrix4f>& transform_vector,
         float &covarianceTime) {
     pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> trans_est;
     //        Eigen::Matrix4f transformVal;
@@ -317,13 +305,14 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
         Eigen::Matrix4f noisy_transform;
         trans_est.estimateRigidTransformation(srcCloud, tgtCloud,
                 *src2tgt_correspondences, noisy_transform);
+        // TODO: covariance matrix could be computed much faster by
+        // directly populating matrix entries in upper diagonal
         estimate_matrix(trials, 0) = noisy_transform(0, 3);
         estimate_matrix(trials, 1) = noisy_transform(1, 3);
         estimate_matrix(trials, 2) = noisy_transform(2, 3);
         estimate_matrix(trials, 3) = noisy_transform(0, 2);
         estimate_matrix(trials, 4) = noisy_transform(1, 2);
         estimate_matrix(trials, 5) = noisy_transform(0, 1);
-        transform_vector.push_back(noisy_transform);
         //Eigen::toString("noisy_transform = ", noisy_transform);
         srcCloud.clear();
         tgtCloud.clear();
@@ -339,7 +328,6 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
 bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         Eigen::Matrix4f& trans,
         Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
-        std::vector<Eigen::Matrix4f>& transform_vector,
         float& detector_time, float& descriptor_time, float& match_time,
         float& RANSAC_time, float& covarianceTime,
         int& numFeatures, int& numMatches, int& numInliers) {
@@ -625,7 +613,6 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
             keypoints_frame,
             prior_keypoints,
             covMatrix,
-            transform_vector,
             covarianceTime);
 
     // Post-process: Save keypoints, descriptors and point cloud of current frame

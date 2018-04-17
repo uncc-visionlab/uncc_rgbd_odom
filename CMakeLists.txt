@@ -8,21 +8,11 @@ set( CMAKE_FIND_DEBUG_MODE 1 )
 #
 # Note: CLEAN COMPILE AFTER CHANGING OpenCV_DIR!!!!
 #
-# HOME PC / Jade
+# HOME PC
 #set( OpenCV_DIR /home/arwillis/opencv-2.4/dist-shared/share/OpenCV )
 #set( OpenCV_DIR /home/arwillis/opencv-3.0.0/dist-shared/share/OpenCV )
-#set ( OpenCV_DIR "/opt/ros/indigo/share/OpenCV-3.1.0-dev")
-#set( OpenCV_DIR "/usr/share/OpenCV" )
+#set( OpenCV_DIR "/opt/ros/indigo/share/OpenCV-3.1.0-dev")
 #
-# Work PC / Indigo
-#set( OpenCV_DIR /home.old/arwillis/lib/opencv-2.4/dist-shared/share/OpenCV )
-#set ( OpenCV_DIR /home.old/arwillis/lib/opencv-3.0/dist-shared/share/OpenCV )
-#
-# If using the Ubuntu 14.04 ros-indigo-opencv3 package
-# you will also need to get the source to image_pipeline and vision_opencv
-# these must be recompiles with set( OpenCV_DIR /opt/ros/indigo/share/opencv3 )
-# in their CMakeLists.txt files as well for the node to function properly.
-#set( OpenCV_DIR /opt/ros/indigo/share/opencv3 )
 #
 # ODROID
 #set( OpenCV_DIR /usr/share/OpenCV )
@@ -187,10 +177,8 @@ add_library(${PROJECT_NAME}
                 src/rgbd_odometry_core.cpp
                 src/rgbd_odom_driver.cpp 
                 src/RobustMatcher.cpp
-                src/point_cloud_xyzrgb.cpp
                 src/image_function_dev.cpp
-                src/opencv_function_dev.cpp
-                src/prob_and_stat_function_dev.cpp)
+                src/opencv_function_dev.cpp)
 
 target_link_libraries(${PROJECT_NAME}
     ${catkin_LIBRARIES} 
@@ -201,10 +189,8 @@ add_executable(${PROJECT_NAME}_run
                 src/rgbd_odometry_core.cpp
                 src/rgbd_odom_driver.cpp 
                 src/RobustMatcher.cpp
-                src/point_cloud_xyzrgb.cpp
                 src/image_function_dev.cpp
-                src/opencv_function_dev.cpp
-                src/prob_and_stat_function_dev.cpp)
+                src/opencv_function_dev.cpp)
 
 target_link_libraries(${PROJECT_NAME}_run
     ${catkin_LIBRARIES} 

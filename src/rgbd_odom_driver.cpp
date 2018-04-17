@@ -21,6 +21,7 @@
 #include <image_transport/image_transport.h>
 #include <image_transport/subscriber_filter.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <eigen_conversions/eigen_msg.h>
 
 // OpenCV includes
 #include <opencv2/core/core.hpp>
@@ -40,9 +41,6 @@
 
 // Includes for this Library
 #include <rgbd_odometry/rgbd_odometry.h>
-#include <rgbd_odometry/point_cloud_xyzrgb.h>
-
-#include <eigen_conversions/eigen_msg.h>
 
 void toString(pcl::PointXYZRGB& ptrgb) {
     ROS_INFO("x,y,z=(%f,%f,%f) r,g,b=(%d,%d,%d)",

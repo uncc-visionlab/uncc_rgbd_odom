@@ -40,7 +40,7 @@
 #include <tf/transform_broadcaster.h>
 
 // Includes for this Library
-#include <rgbd_odometry/rgbd_odometry.h>
+#include <rgbd_odometry/rgbd_odometry_ros.h>
 
 void toString(pcl::PointXYZRGB& ptrgb) {
     ROS_INFO("x,y,z=(%f,%f,%f) r,g,b=(%d,%d,%d)",

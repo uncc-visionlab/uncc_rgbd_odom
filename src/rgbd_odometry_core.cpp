@@ -12,6 +12,10 @@
 
 #include <rgbd_odometry/rgbd_odometry_core.h>
 
+#ifdef HAVE_iGRAND
+#include <rgbd_odometry/opencv_function_dev.h>
+#endif
+
 int toIndex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, int column, int row) {
     return row * cloud->width + column;
 }
@@ -162,7 +166,7 @@ int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& d
         cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
         cv::Ptr<cv::UMat>& descriptors_frame, float& detector_time, float& descriptor_time,
         const std::string keyframe_frameid_str) {
-#ifdef USE_iGRAND
+#ifdef HAVE_iGRAND
     if (cv::iGRAND * iGRAND_detector = rmatcher->detector_.dynamicCast<cv::iGRAND>()) {
         iGRAND_detector->setDepthImage(&dimg);
     }
@@ -171,11 +175,6 @@ int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& d
     double t = (double) cv::getTickCount();
     detector_->detect(frame, *keypoints_frame, mask);
     int numFeatures = keypoints_frame->size();
-#ifdef PERFORMANCE_EVAL
-    if (keypoints_frame->size() > MAX_KEYPOINTS) {
-        keypoints_frame->resize(MAX_KEYPOINTS);
-    }
-#endif    
     detector_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
     //printf("execution time = %dms\n", (int) (t * 1000. / cv::getTickFrequency()));
     if (SHOW_ORB_vs_iGRaND) {
@@ -197,7 +196,7 @@ int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& d
         //cv::waitKey(3);
     }
 
-#ifdef USE_iGRAND
+#ifdef HAVE_iGRAND
     if (cv::iGRAND * iGRAND_extractor = extractor_.dynamicCast<cv::iGRAND>()) {
         iGRAND_extractor->setDepthImage(&dimg);
     }

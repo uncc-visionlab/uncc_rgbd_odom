@@ -36,14 +36,7 @@
 
 #define NUMIDCHARS 3
 #define DEBUG false
-//#define COMPUTE_PTCLOUDS false
-//#ifdef OPENCV3
-//static cv::UMat prior_image;
-//static cv::Ptr<cv::UMat> prior_descriptors_;
-//#else
-//static cv::Mat prior_image;
-//static cv::Ptr<cv::Mat> prior_descriptors_;
-//#endif
+//#define PERFORMANCE_EVAL false
 
 namespace stdpatch {
 

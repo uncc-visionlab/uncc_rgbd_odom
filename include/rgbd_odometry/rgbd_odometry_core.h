@@ -28,9 +28,6 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-#include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d/nonfree.hpp>
-
 // PCL includes
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -45,12 +42,8 @@
 #include <rgbd_odometry/RobustMatcher.h>
 
 // Odometry performance data logging variables
-//bool LOG_ODOMETRY_TO_FILE = false;
 static std::string _logfilename("/home/arwillis/odom_transforms_noisy.m");
 static std::ofstream fos;
-
-//#define IMAGE_MASK_MARGIN 20
-//#define PERFORMANCE_EVAL false
 
 enum Depth_Processing {
     NONE, MOVING_AVERAGE, DITHER

@@ -4,6 +4,7 @@
 #include <boost/shared_ptr.hpp>
 #include <sstream>
 #include <opencv2/core.hpp>
+#include <opencv2/features2d.hpp>
 
 namespace cv {
 

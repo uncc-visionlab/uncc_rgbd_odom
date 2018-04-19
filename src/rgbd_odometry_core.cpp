@@ -133,7 +133,7 @@ void logTransformData(//std::string& frameid, ros::Time& frame_time,
     }
 }
 
-bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg,
+bool RGBDOdometryCore::computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
         Eigen::Matrix4f& trans, Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix) {
     float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
     int numFeatures, numMatches, numInliers;
@@ -146,6 +146,38 @@ bool RGBDOdometryCore::compute(cv::UMat &frame, cv::UMat &depthimg,
     if (!odomEstimatorSuccess) {
         return false;
     }
+    Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
+    Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
+    if (LOG_ODOMETRY_TO_FILE) {
+        logTransformData(//keyframe_frameid_str, frame_time,
+                rmatcher->detectorStr, rmatcher->descriptorStr,
+                detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+                numFeatures, numMatches, numInliers,
+                quat, translation,
+                trans, covMatrix);
+    }
+    //prior_keyframe_frameid_str = keyframe_frameid_str;
+}
+
+bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA,
+        cv::UMat &frameB, cv::UMat &depthimgB,
+        Eigen::Matrix4f& trans, Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix) {
+    float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
+    int numFeatures, numMatches, numInliers;
+
+    computeRelativePose(frameA, depthimgA,
+            trans, covMatrix,
+            detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+            numFeatures, numMatches, numInliers);
+    bool odomEstimatorSuccess = computeRelativePose(frameB, depthimgB,
+            trans, covMatrix,
+            detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
+            numFeatures, numMatches, numInliers);
+    if (!odomEstimatorSuccess) {
+        return false;
+    }
+    // trigger a re-initialization of the odom algorithm
+    prior_descriptors_.release();
     Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
     Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
     if (LOG_ODOMETRY_TO_FILE) {

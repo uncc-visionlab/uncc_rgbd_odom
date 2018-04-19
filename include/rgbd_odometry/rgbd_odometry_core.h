@@ -90,7 +90,12 @@ public:
             float& RANSAC_time, float& covarianceTime,
             int& numFeatures, int& numMatches, int& numInliers);
 
-    bool compute(cv::UMat &frame, cv::UMat &depthimg,
+    bool computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
+            Eigen::Matrix4f& trans,
+            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
+
+    bool computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA,
+            cv::UMat &frameB, cv::UMat &depthimgB,
             Eigen::Matrix4f& trans,
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
 

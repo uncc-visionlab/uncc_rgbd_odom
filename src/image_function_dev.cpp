@@ -114,8 +114,8 @@ bool ImageFunctionProvider::_ocl_computeMask(cv::InputArray src, cv::OutputArray
     cv::ocl::Kernel kernel("depthmaskf", oclsrc, compile_flags);
     kernel.args(cv::ocl::KernelArg::ReadOnlyNoSize(src.getUMat()),
             cv::ocl::KernelArg::ReadWrite(dst.getUMat()));
-    //    kernel.args(src, dst);
-    size_t globalThreads[3] = {src.cols(), src.rows(), 1};
+    //    kernel.args(src, dst);    
+    size_t globalThreads[3] = {(long unsigned int)src.cols(), (long unsigned int)src.rows(), 1};
     //size_t localThreads[3] = { 16, 16, 1 };
     bool success = kernel.run(3, globalThreads, NULL, true);
     if (!success) {

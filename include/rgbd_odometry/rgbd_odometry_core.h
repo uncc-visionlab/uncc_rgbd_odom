@@ -16,17 +16,16 @@
 
 #include <cstdio>
 #include <fstream>
+#include <iostream>
+#include <string>
 
 #include <boost/shared_ptr.hpp>
 
 // OpenCV includes
+#include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/ocl.hpp>
-
-// OpenCV includes
-#include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
 
 // PCL includes
 #include <pcl/point_cloud.h>
@@ -113,7 +112,7 @@ public:
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
             float &covarianceTime);
 
-    ImageFunctionProvider::Ptr getImageFunctionProvider() {
+    ImageFunctionProvider::Ptr getImageFunctionProvider() const {
         return imageFunctionProvider;
     }
 
@@ -125,7 +124,7 @@ public:
         rgbCamera_Kmatrix = matrix.clone();
     }
 
-    cv::Mat getRGBCameraIntrinsics() {
+    cv::Mat getRGBCameraIntrinsics() const {
         return rgbCamera_Kmatrix.clone();
     }
 
@@ -137,7 +136,7 @@ public:
         rmatcher = rm;
     }
 
-    RobustMatcher::Ptr getMatcher() {
+    RobustMatcher::Ptr getMatcher() const {
         return rmatcher;
     }
 
@@ -153,6 +152,32 @@ public:
         }
     }
 
+    void write(cv::FileStorage& fs) const { //Write serialization for this class
+        fs << "{" << "detector" << getMatcher()->detectorStr
+                << "descriptor" << getMatcher()->descriptorStr
+                << "numKeyPoints" << numKeyPoints
+                << "K" << rgbCamera_Kmatrix
+                << "fast_match" << fast_match
+                << "LOG_ODOMETRY_TO_FILE" << LOG_ODOMETRY_TO_FILE
+                << "DUMP_MATCH_IMAGES" << DUMP_MATCH_IMAGES
+                << "DUMP_RAW_IMAGES" << DUMP_RAW_IMAGES
+                << "SHOW_ORB_vs_iGRaND" << SHOW_ORB_vs_iGRaND << "}";
+    }
+
+    void read(const cv::FileNode& node) { //Read serialization for this class
+        std::string feature_detector_str = (std::string) node["detector"];
+        std::string feature_descriptor_str = (std::string) node["descriptor"];
+        numKeyPoints = (int) node["numKeyPoints"];
+        node["K"] >> rgbCamera_Kmatrix;
+        fast_match = (int) node["fast_match"] != 0;
+        LOG_ODOMETRY_TO_FILE = (int) node["LOG_ODOMETRY_TO_FILE"] != 0;
+        DUMP_MATCH_IMAGES = (int) node["DUMP_MATCH_IMAGES"] != 0;
+        DUMP_RAW_IMAGES = (int) node["DUMP_RAW_IMAGES"] != 0;
+        SHOW_ORB_vs_iGRaND = (int) node["SHOW_ORB_vs_iGRaND"] != 0;
+        rmatcher->setFeatureDetector(feature_detector_str);
+        rmatcher->setDescriptorExtractor(feature_descriptor_str);
+    }
+
 private:
     // -------------------------
     // Disabling default copy constructor and default
@@ -162,35 +187,60 @@ private:
     RGBDOdometryCore& operator=(const RGBDOdometryCore & yRef);
 
 protected:
-    bool LOG_ODOMETRY_TO_FILE;
-    //bool COMPUTE_PTCLOUDS;
-    bool DUMP_MATCH_IMAGES;
-    bool DUMP_RAW_IMAGES;
-    bool SHOW_ORB_vs_iGRaND;
-
     cv::Mat rgbCamera_Kmatrix;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_ptcloud_sptr;
-
     //std::string prior_keyframe_frameid_str;
-    bool fast_match;
-    int numKeyPoints;
     RobustMatcher::Ptr rmatcher; // instantiate RobustMatcher
-
     // class to provide accelerated image processing functions
     ImageFunctionProvider::Ptr imageFunctionProvider;
-
     // class to provide depth image processing functions
     Depth_Processing depth_processing;
 
 
     cv::Ptr<std::vector<cv::KeyPoint> > keypoints_frame;
     cv::Ptr<cv::UMat> descriptors_frame;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_ptcloud_sptr;
 
     cv::UMat prior_image;
     cv::Ptr<std::vector<cv::KeyPoint> > prior_keypoints;
     cv::Ptr<cv::UMat> prior_descriptors_;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr prior_ptcloud_sptr;
+public:
+    bool LOG_ODOMETRY_TO_FILE;
+    //bool COMPUTE_PTCLOUDS;
+    bool DUMP_MATCH_IMAGES;
+    bool DUMP_RAW_IMAGES;
+    bool SHOW_ORB_vs_iGRaND;
+    bool fast_match;
+    int numKeyPoints;
 };
+
+//These write and read functions must be defined for the serialization in FileStorage to work
+static void write(cv::FileStorage& fs, const std::string&, const RGBDOdometryCore& x) {
+    x.write(fs);
+}
+
+static void read(const cv::FileNode& node, RGBDOdometryCore& x, const RGBDOdometryCore& default_value = RGBDOdometryCore()) {
+    if (node.empty()) {
+        std::cout << "Could not read file node for class RGBDOdometryCore." << std::endl;
+        //x = default_value;
+    } else {
+        x.read(node);
+    }
+}
+
+// This function will print our custom class to the console
+static std::ostream& operator<<(std::ostream& out, const RGBDOdometryCore& m) {
+    out << "{" << " detector = " << m.getMatcher()->detectorStr << ", ";
+    out << " descriptor  = " << m.getMatcher()->descriptorStr << ", ";
+    out << " numKeyPoints = " << m.numKeyPoints << ", ";
+    out << " K = " << m.getRGBCameraIntrinsics() << "}";
+    out << " fast_match = " << m.fast_match << ", ";
+    out << " LOG_ODOMETRY_TO_FILE = " << m.LOG_ODOMETRY_TO_FILE << ", ";
+    out << " DUMP_MATCH_IMAGES = " << m.DUMP_MATCH_IMAGES << ", ";
+    out << " DUMP_RAW_IMAGES = " << m.DUMP_RAW_IMAGES << ", ";
+    out << " SHOW_ORB_vs_iGRaND = " << m.SHOW_ORB_vs_iGRaND << "}";
+    return out;
+}
 
 #endif /* RGBD_ODOMETRY_CORE_HPP */
 

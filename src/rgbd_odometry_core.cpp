@@ -133,6 +133,14 @@ void logTransformData(//std::string& frameid, ros::Time& frame_time,
     }
 }
 
+//bool RGBDOdometryCore::readConfigFile() {
+//string filename = "I.xml";
+//FileStorage fs(filename, FileStorage::WRITE);
+////...
+//fs.open(filename, FileStorage::READ);
+//fs.release(); 
+//}
+
 bool RGBDOdometryCore::computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
         Eigen::Matrix4f& trans, Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix) {
     float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;

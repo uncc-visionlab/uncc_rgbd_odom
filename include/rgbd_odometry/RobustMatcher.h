@@ -14,8 +14,8 @@
 #include <boost/shared_ptr.hpp>
 
 #include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d/nonfree.hpp>
 #include <opencv2/xfeatures2d.hpp>
+#include <opencv2/xfeatures2d/nonfree.hpp>
 
 #include <opencv2/flann/flann.hpp>
 #include <opencv2/flann/dist.h>

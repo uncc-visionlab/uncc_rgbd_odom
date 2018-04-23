@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 # this line sets the value of the ${PROJECT_NAME} variable
 project(uncc_rgbd_odom)
-#subdirs(core)
+
+subdirs(core)
 # uncomment this if cmake is not finding your packages
 # to view the paths searched and decisions made by cmake
 set( CMAKE_FIND_DEBUG_MODE 1 )
@@ -19,6 +20,7 @@ set( CMAKE_FIND_DEBUG_MODE 1 )
 #set( OpenCV_DIR /usr/local/share/OpenCV )
 #set( OpenCV_DIR /home/odroid/opencv-2.4.9/build )
 set( CMAKE_VERBOSE_MAKEFILE ON )
+set( USE_SYSTEM_VTK OFF)
 
 # Declare variable having additional compiler flags for profiling 
 set( GCC_PROFILE_COMPILE_FLAGS "-g -pg" )
@@ -141,8 +143,9 @@ catkin_package(
     # the INCLUDE below allows us to include our headers 
     # using #include <${PROJECT_NAME}/XXXX.h> by creating a 
     # folder having name include/${PROJECT_NAME} from the package root folder
-    INCLUDE_DIRS include 
-    LIBRARIES ${PROJECT_NAME}
+    INCLUDE_DIRS include core/include
+    LIBRARIES uncc_rgbd_odom_core
+#    LIBRARIES ${PROJECT_NAME}_core
 )
 
 ###########
@@ -164,6 +167,7 @@ catkin_package(
 #include_directories(include ${catkin_INCLUDE_DIRS})
 include_directories(
         include
+        core/include
         SYSTEM 
         ${BOOST_INCLUDE_DIRS}
         ${catkin_INCLUDE_DIRS}
@@ -173,16 +177,16 @@ include_directories(
 
 link_directories(/opt/ros/kinetic/lib)
 
-add_library(${PROJECT_NAME}
-                src/rgbd_odometry_core.cpp
-                src/RobustMatcher.cpp
-                src/image_function_dev.cpp
-                src/opencv_function_dev.cpp)
+#add_library(${PROJECT_NAME}
+#                src/rgbd_odometry_core.cpp
+#                src/RobustMatcher.cpp
+#                src/image_function_dev.cpp
+#                src/opencv_function_dev.cpp)
 
-target_link_libraries(${PROJECT_NAME}
-    ${catkin_LIBRARIES} 
-    ${Boost_LIBRARIES} 
-    ${OpenCV_LIBS})
+#target_link_libraries(${PROJECT_NAME}
+#    ${catkin_LIBRARIES} 
+#    ${Boost_LIBRARIES} 
+#    ${OpenCV_LIBS})
 
 add_executable(${PROJECT_NAME}_run 
 #                src/rgbd_odometry_core.cpp
@@ -195,8 +199,8 @@ target_link_libraries(${PROJECT_NAME}_run
     ${catkin_LIBRARIES} 
     ${Boost_LIBRARIES} 
     ${OpenCV_LIBS}
-    ${PROJECT_NAME})
-#    uncc_rgbd_odom_core)
+#    ${PROJECT_NAME})
+    uncc_rgbd_odom_core)
 #target_link_libraries(feature3d_engine ${catkin_LIBRARIES} opencv_nonfree)
 #add_dependencies(rgbd_odometry geometry_msgs_gencpp nav_msgs_gencpp)
 #add_dependencies(${PROJECT_NAME} image_geometry)
@@ -221,9 +225,9 @@ target_link_libraries(${PROJECT_NAME}_run
 #   scripts/my_python_script
 #   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 # )
-install(TARGETS ${PROJECT_NAME}
-        DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
+#install(TARGETS ${PROJECT_NAME}
+#        DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#)
 
 install(DIRECTORY include/${PROJECT_NAME}/
         DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}

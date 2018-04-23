@@ -3,10 +3,6 @@
 #include <iostream>
 #include <fstream>
 
-// ROS includes
-#include <ros/ros.h>
-//#include <cv_bridge/cv_bridge.h>
-
 // OpenCV includes
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>

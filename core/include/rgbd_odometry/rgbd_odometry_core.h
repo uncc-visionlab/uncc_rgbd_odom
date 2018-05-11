@@ -105,7 +105,7 @@ public:
             Pose& global_delta_pose_estimate,
             int level, bool compute_image_gradients, int max_iterations);
 
-    bool estimateDeltaPoseReprojectionErrorMultiScale(
+    bool computeRelativePoseDirect(
         const cv::Mat& color_img1, const cv::Mat& depth_img1,
         const cv::Mat& color_img2, const cv::Mat& depth_img2,
         Pose& global_delta_pose_estimate, 

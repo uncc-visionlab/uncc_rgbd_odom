@@ -531,7 +531,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
 
 }
 
-bool RGBDOdometryCore::estimateDeltaPoseReprojectionErrorMultiScale(
+bool RGBDOdometryCore::computeRelativePoseDirect(
         const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
         const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
         Pose& global_delta_pose_estimate,

@@ -39,6 +39,7 @@
 
 #include <rgbd_odometry/image_function_dev.h>
 #include <rgbd_odometry/RobustMatcher.h>
+#include <rgbd_odometry/pose.hpp>
 
 // Odometry performance data logging variables
 static std::string _logfilename("/home/arwillis/odom_transforms_noisy.m");
@@ -97,6 +98,18 @@ public:
             cv::UMat &frameB, cv::UMat &depthimgB,
             Eigen::Matrix4f& trans,
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
+    
+    bool computeRelativePoseDirect(
+            const cv::Mat& color_img1, const cv::Mat& depth_img1,
+            const cv::Mat& color_img2, const cv::Mat& depth_img2,
+            Pose& global_delta_pose_estimate,
+            int level, bool compute_image_gradients, int max_iterations);
+
+    bool estimateDeltaPoseReprojectionErrorMultiScale(
+        const cv::Mat& color_img1, const cv::Mat& depth_img1,
+        const cv::Mat& color_img2, const cv::Mat& depth_img2,
+        Pose& global_delta_pose_estimate, 
+        int max_iterations_per_level, int start_level, int end_level);
 
     int computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& dimg, cv::UMat& mask,
             std::string& name,

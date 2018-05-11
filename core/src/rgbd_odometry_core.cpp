@@ -11,6 +11,8 @@
 #include <random>
 
 #include <rgbd_odometry/rgbd_odometry_core.h>
+#include <opencv-3.3.1-dev/opencv2/core/types.hpp>
+#include <opencv-3.3.1-dev/opencv2/core/mat.hpp>
 
 #ifdef HAVE_iGRAND
 #include <rgbd_odometry/opencv_function_dev.h>
@@ -133,6 +135,36 @@ void logTransformData(//std::string& frameid, ros::Time& frame_time,
     }
 }
 
+static std::vector<cv::Point3_<float>> reconstructParallelized(const cv::Mat_<float>& depth_image, const cv::Point_<float>& focal_length, const cv::Point_<float>& image_center) {
+
+    std::vector<cv::Point3_<float>> points;
+    float nan = std::numeric_limits<float>::quiet_NaN();
+    points.resize(depth_image.total(), cv::Point3_<float>(nan, nan, nan));
+    float width = depth_image.cols;
+
+    depth_image.forEach(
+        [&points, &width, &focal_length, &image_center](const float& z, const int* position) -> void {
+            size_t pixel_y = position[0];
+            size_t pixel_x = position[1];
+            size_t index = pixel_y*width + pixel_x;
+
+            if (not std::isnan(z)) {
+                float x = z*(pixel_x - image_center.x)/focal_length.x;
+                float y = z*(pixel_y - image_center.y)/focal_length.y;
+                points[index] = cv::Point3_<float>(x, y, z);
+            }
+        }
+    );
+
+    return points;
+
+}
+
+static bool inImage(const float& px, const float& py, const float& height, const float& width) {
+    // checks that the pixel is within the image bounds
+    return (py >= 0 and py < height and px >= 0 and px < width);
+}
+
 //bool RGBDOdometryCore::readConfigFile() {
 //string filename = "I.xml";
 //FileStorage fs(filename, FileStorage::WRITE);
@@ -197,6 +229,345 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
                 trans, covMatrix);
     }
     //prior_keyframe_frameid_str = keyframe_frameid_str;
+}
+
+bool RGBDOdometryCore::computeRelativePoseDirect(
+        const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
+        const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
+        Pose& global_delta_pose_estimate,
+        int level = 0, bool compute_image_gradients = true, int max_iterations = 50) {
+
+    // Inverse compositional image alignment with parallelization
+
+    if (not (color_img1.isContinuous() and depth_img1.isContinuous() and color_img2.isContinuous() and depth_img2.isContinuous()))
+        throw std::runtime_error("Color and Depth cv::Mats must be continuous!");
+
+    Pose local_delta_pose_estimate = global_delta_pose_estimate;
+    local_delta_pose_estimate.invertInPlace();
+    Pose delta_pose_update, prev_local_delta_pose_estimate;
+
+    int width1 = color_img1.cols;
+    int height1 = color_img1.rows;
+    int width2 = color_img2.cols;
+    int height2 = color_img2.rows;
+    cv::Mat intrinsics = this->getRGBCameraIntrinsics();
+    float fx = intrinsics.at<float>(0, 0);
+    float fy = intrinsics.at<float>(1, 1);
+    float cx = intrinsics.at<float>(0, 2);
+    float cy = intrinsics.at<float>(1, 2);
+    float inv_fx = 1/fx;
+    float inv_fy = 1/fy;
+    cv::Mat intensity_img1, intensity_img2;
+    cv::cvtColor(color_img1, intensity_img1, cv::COLOR_RGB2GRAY);
+    cv::cvtColor(color_img2, intensity_img2, cv::COLOR_RGB2GRAY);
+    // normalizing intensities to range 0-1
+    intensity_img1.convertTo(intensity_img1, CV_32F, 1.0/255.0);
+    intensity_img2.convertTo(intensity_img2, CV_32F, 1.0/255.0);
+
+    // compute image gradients
+    static cv::Mat depth_img2_dx, depth_img2_dy, intensity_img2_dx, intensity_img2_dy;
+    if (compute_image_gradients) {
+        cv::Mat cdiffX = (cv::Mat_<float>(1,3) << -1.0f, 0, 1.0f);
+        cv::Mat cdiffY = (cv::Mat_<float>(3,1) << -1.0f, 0, 1.0f);
+        cv::filter2D(depth_img2, depth_img2_dx, -1, cdiffX);
+        cv::filter2D(depth_img2, depth_img2_dy, -1, cdiffY);
+        cv::filter2D(intensity_img2, intensity_img2_dx, -1, cdiffX);
+        cv::filter2D(intensity_img2, intensity_img2_dy, -1, cdiffY);
+    }
+
+    // initialize pointclouds
+    int sample_factor = std::pow(2, level);
+    std::vector<cv::Point3f> points1 = reconstructParallelized(depth_img1, cv::Point2f(fx, fy)/sample_factor, cv::Point2f(cx, cy)/sample_factor);
+    cv::Mat ptcloud1(points1, false);
+    ptcloud1.reshape(3, height1);
+    
+    cv::Matx33f rotation;
+    cv::Vec3f translation;
+    cv::Mat pixels_valid(width1*height1, 1, CV_8U);
+    cv::Mat depth_residuals(width1*height1, 1, CV_32F);
+    cv::Mat intensity_residuals(width1*height1, 1, CV_32F);
+    cv::Mat depth_gradient_vecs(width1*height1, 6, CV_32F);
+    cv::Mat intensity_gradient_vecs(width1*height1, 6, CV_32F);
+    cv::Mat error_hessian(6, 6, CV_32F);
+    cv::Mat error_grad(6, 1, CV_32F);
+    float* error_grad_ptr = error_grad.ptr<float>(0, 0);
+    cv::Mat param_update(6, 1, CV_32F);
+    cv::Mat error_hessian_double(6, 6, CV_32F);
+    cv::Mat error_grad_double(6, 1, CV_64F);
+    cv::Mat param_update_double(6, 1, CV_64F);
+    float intensity_weight = 1.5;
+    float intensity_weight_sq = intensity_weight*intensity_weight;
+
+    float initial_error, error, num_constraints;
+    float last_error = std::numeric_limits<float>::infinity();
+    double param_max = std::numeric_limits<float>::infinity();
+    bool error_decreased, enough_constraints, param_update_valid;
+    std::string reason_stopped;
+    int iterations = 0;
+    bool iterate = true;
+
+    while (iterate) {
+        iterations++;
+
+        // get current transformation
+        rotation = local_delta_pose_estimate.getRotation_Matx33();
+        local_delta_pose_estimate.getTranslation(translation);
+
+        pixels_valid.setTo(false);
+
+        ptcloud1.forEach<cv::Vec3f>(
+            // this lambda runs for each pixel and is parallelized
+            [&](const cv::Vec3f& pt, const int* position) {
+
+                if (!std::isnan(pt[2])) {
+
+                    cv::Vec3f transformed_pt = rotation*pt + translation;
+                    cv::Point2f warped_px;
+                    warped_px.x = (transformed_pt[0] / (transformed_pt[2] * inv_fx)) + cx;
+                    warped_px.y = (transformed_pt[1] / (transformed_pt[2] * inv_fy)) + cy;
+
+                    float x0 = std::floor(warped_px.x);
+                    float y0 = std::floor(warped_px.y);
+                    float x1 = x0 + 1;
+                    float y1 = y0 + 1;
+
+                    if (inImage(x0, y0, height2, width2) and inImage(x1, y1, height2, width2)) {
+
+                        // compute corner indices for pointer access
+                        int row_y0 = y0*width2;
+                        int row_y1 = y1*width2;
+                        int index_x0y0 = row_y0 + x0;
+                        int index_x0y1 = row_y1 + x0;
+                        int index_x1y0 = row_y0 + x1;
+                        int index_x1y1 = row_y1 + x1;
+
+                        // compute interpolation weights
+                        float x1w = warped_px.x - x0;
+                        float x0w = 1.0f - x1w;
+                        float y1w = warped_px.y - y0;
+                        float y0w = 1.0f - y1w;
+
+                        // interpolate depth related values
+                        float depth_img2_at_warped_px = y0w * (((float *)depth_img2.data)[index_x0y0] * x0w + ((float *)depth_img2.data)[index_x1y0] * x1w)  + 
+                            y1w * (((float *)depth_img2.data)[index_x0y1] * x0w + ((float *)depth_img2.data)[index_x1y1] * x1w);
+
+                        float depth2_gradx_at_warped_px = y0w * (((float *)depth_img2_dx.data)[index_x0y0] * x0w + ((float *)depth_img2_dx.data)[index_x1y0] * x1w)  + 
+                            y1w * (((float *)depth_img2_dx.data)[index_x0y1] * x0w + ((float *)depth_img2_dx.data)[index_x1y1] * x1w);
+
+                        float depth2_grady_at_warped_px = y0w * (((float *)depth_img2_dy.data)[index_x0y0] * x0w + ((float *)depth_img2_dy.data)[index_x1y0] * x1w)  + 
+                            y1w * (((float *)depth_img2_dy.data)[index_x0y1] * x0w + ((float *)depth_img2_dy.data)[index_x1y1] * x1w);
+
+                        if (!std::isnan(depth_img2_at_warped_px) && !std::isnan(depth2_gradx_at_warped_px) && !std::isnan(depth2_grady_at_warped_px)) {
+
+                            // interpolate intensity related values
+                            float intensity_img2_at_warped_px = y0w * (((float *)intensity_img2.data)[index_x0y0] * x0w + ((float *)intensity_img2.data)[index_x1y0] * x1w)  + 
+                                y1w * (((float *)intensity_img2.data)[index_x0y1] * x0w + ((float *)intensity_img2.data)[index_x1y1] * x1w);
+
+                            float intensity2_gradx_at_warped_px = y0w * (((float *)intensity_img2_dx.data)[index_x0y0] * x0w + ((float *)intensity_img2_dx.data)[index_x1y0] * x1w)  + 
+                                y1w * (((float *)intensity_img2_dx.data)[index_x0y1] * x0w + ((float *)intensity_img2_dx.data)[index_x1y1] * x1w);
+
+                            float intensity2_grady_at_warped_px = y0w * (((float *)intensity_img2_dy.data)[index_x0y0] * x0w + ((float *)intensity_img2_dy.data)[index_x1y0] * x1w)  + 
+                                y1w * (((float *)intensity_img2_dy.data)[index_x0y1] * x0w + ((float *)intensity_img2_dy.data)[index_x1y1] * x1w);
+
+                            // compute index of initial point (pt)
+                            int y = position[0];
+                            int x = position[1];
+                            int index = y*width1 + x;
+
+                            pixels_valid.data[index] = true;
+
+                            // compute residuals
+                            float& depth_residual = ((float *)depth_residuals.data)[index];
+                            depth_residual = depth_img2_at_warped_px - transformed_pt[2];
+
+                            float& intensity_residual = ((float *)intensity_residuals.data)[index];
+                            const float& intensity_img1_at_xy = ((float *)intensity_img1.data)[index];
+                            intensity_residual = intensity_img2_at_warped_px - intensity_img1_at_xy;
+
+                            // evaluate for this pixel: gradient vec = imggrad(I)*Jw at jpt
+                            const cv::Vec3f& jpt = pt; // point where the jacobian will be evaluated
+                            float inv_depth = 1.0f / jpt[2];
+                            float inv_depth_sq = inv_depth*inv_depth;
+
+                            float* depth_gradient_vec = depth_gradient_vecs.ptr<float>(index);
+                            depth_gradient_vec[0] = depth2_gradx_at_warped_px * fx * inv_depth + depth2_grady_at_warped_px * 0;
+                            depth_gradient_vec[1] = depth2_gradx_at_warped_px * 0 + depth2_grady_at_warped_px * fy * inv_depth;
+                            depth_gradient_vec[2] = -(depth2_gradx_at_warped_px * fx * jpt[0] + depth2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq - 1.0f;
+                            depth_gradient_vec[3] = -(depth2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + depth2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq - jpt[1];
+                            depth_gradient_vec[4] = (depth2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + depth2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq + jpt[0];
+                            depth_gradient_vec[5] = (-depth2_gradx_at_warped_px * fx * jpt[1] + depth2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
+
+                            float* intensity_gradient_vec = intensity_gradient_vecs.ptr<float>(index);
+                            intensity_gradient_vec[0] = intensity2_gradx_at_warped_px * fx * inv_depth + intensity2_grady_at_warped_px * 0;
+                            intensity_gradient_vec[1] = intensity2_gradx_at_warped_px * 0 + intensity2_grady_at_warped_px * fy * inv_depth;
+                            intensity_gradient_vec[2] = -(intensity2_gradx_at_warped_px * fx * jpt[0] + intensity2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq;
+                            intensity_gradient_vec[3] = -(intensity2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + intensity2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq;
+                            intensity_gradient_vec[4] = (intensity2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + intensity2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq;
+                            intensity_gradient_vec[5] = (-intensity2_gradx_at_warped_px * fx * jpt[1] + intensity2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        );
+
+        error = 0;
+        num_constraints = 0;
+        error_hessian.setTo(0.0f);
+        error_grad.setTo(0.0f);
+
+        // finish what we can't do in parallel
+        for (int y = 0; y < height1; ++y) {
+            for (int x = 0; x < width1; ++x) {
+
+                int index = y*width1 + x;
+                uchar& pixel_valid = pixels_valid.data[index];
+
+                if (pixel_valid) {
+
+                    float* depth_gradient_vec = depth_gradient_vecs.ptr<float>(index);
+                    float* intensity_gradient_vec = intensity_gradient_vecs.ptr<float>(index);
+
+                    // add pixel's contribution to gradient vector
+                    float& depth_residual = ((float *)depth_residuals.data)[index];
+                    float& intensity_residual = ((float *)intensity_residuals.data)[index];
+                    for (int i = 0; i < 6; ++i) {
+                        error_grad_ptr[i] += depth_residual*depth_gradient_vec[i]; 
+                        error_grad_ptr[i] += intensity_weight*intensity_residual*intensity_gradient_vec[i];
+                    }
+
+                    // compute upper triangular component this point contributes to the Hessian
+                    float* error_hessian_ptr = error_hessian.ptr<float>(0, 0);
+                    for (int row = 0; row < 6; ++row) {
+                        error_hessian_ptr += row;                
+                        for (int col = row; col < 6; ++col, ++error_hessian_ptr) {
+                            *error_hessian_ptr += depth_gradient_vec[row]*depth_gradient_vec[col]; 
+                            *error_hessian_ptr += intensity_gradient_vec[row]*intensity_gradient_vec[col];
+                        }
+                    }
+
+                    error += depth_residual*depth_residual + intensity_weight_sq*intensity_residual*intensity_residual;
+                    num_constraints++;
+
+                }
+            }
+        }
+        cv::completeSymm(error_hessian);
+
+        if (iterations == 1)
+            initial_error = error;
+
+        error_decreased = error < last_error;
+        enough_constraints = num_constraints > 6;
+
+        if (error_decreased) {
+
+            if (enough_constraints) {
+
+                error_hessian.convertTo(error_hessian_double, CV_64F);
+                error_grad.convertTo(error_grad_double, CV_64F);
+                param_update.convertTo(param_update_double, CV_64F);
+
+                cv::solve(error_hessian_double, error_grad_double, param_update_double);
+                param_update_valid = cv::checkRange(param_update_double);
+
+                if (not param_update_valid) { // check for NaNs
+                    reason_stopped = std::string("Invalid values in parameter update!");
+                } else {
+                    param_update_double.convertTo(param_update, CV_32F);
+                    cv::minMaxLoc(cv::abs(param_update), nullptr, &param_max);
+                }
+
+            } else {
+                reason_stopped = std::string("Not enough constraints for minimization!");
+            }
+
+        } else {
+            std::cout << "Error increased.";
+        }
+
+        if (not(error_decreased and enough_constraints and param_update_valid)) { 
+            // don't update the parameters, stop iterating now
+            local_delta_pose_estimate = prev_local_delta_pose_estimate;
+            error = last_error;
+            break;
+        } else if (param_max <= 8e-6) { 
+            // finish this update and then stop iterating
+            reason_stopped = std::string("Minimum detected.");
+            iterate = false;
+        } else if (iterations > max_iterations) {
+            reason_stopped = std::string("Maximum iterations exceeded.");
+            iterate = false;
+        }
+
+        // update parameters via composition
+        prev_local_delta_pose_estimate = local_delta_pose_estimate;
+        delta_pose_update.setFromTwist(cv::Vec3f((float *)param_update.data), 
+                cv::Vec3f((float *)param_update.data + 3));
+        delta_pose_update.invertInPlace();
+        Pose::multiply(delta_pose_update, local_delta_pose_estimate, local_delta_pose_estimate);
+
+        last_error = error;
+
+    }
+
+    // invert the estimate that we return
+    local_delta_pose_estimate.invertInPlace();
+    global_delta_pose_estimate = local_delta_pose_estimate;
+
+    std::cout << "Initial Error: " << initial_error << "\n";
+    std::cout << "Final Error: " << error << "\n";
+    std::cout << "Iterations: " << iterations << "\n";
+    std::cout << "Reason Stopped: " << reason_stopped << "\n---\n";
+
+    if (error <= initial_error)
+        return true;
+    else
+        return false;
+
+}
+
+bool RGBDOdometryCore::estimateDeltaPoseReprojectionErrorMultiScale(
+        const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
+        const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
+        Pose& global_delta_pose_estimate,
+        int max_iterations_per_level, int start_level, int end_level) {
+
+    Pose local_delta_pose_estimate = global_delta_pose_estimate;
+    bool error_decreased = false;
+    bool compute_image_gradients = true;
+
+    std::cout << "--- Reprojection Error Minimization ---\n";
+
+    for (int level = start_level; level >= end_level; --level) {
+
+        std::cout << "Level: " << level << std::endl;
+        
+        int sample_factor = std::pow(2, level);
+
+        cv::Mat sampled_depth_img1, sampled_color_img1;
+        cv::resize(depth_img1, sampled_depth_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
+        cv::resize(color_img1, sampled_color_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
+
+        bool level_error_decreased = this->computeRelativePoseDirect(
+            sampled_color_img1, sampled_depth_img1, color_img2, depth_img2, local_delta_pose_estimate, level, compute_image_gradients, max_iterations_per_level);
+
+        if (level_error_decreased) {
+            error_decreased = true;
+            global_delta_pose_estimate = local_delta_pose_estimate;
+        }
+
+        if (compute_image_gradients)
+            compute_image_gradients = false;
+
+    }
+
+    return error_decreased;
+
 }
 
 int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& dimg, cv::UMat& mask,

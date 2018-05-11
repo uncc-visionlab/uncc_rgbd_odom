@@ -11,8 +11,8 @@
 #include <random>
 
 #include <rgbd_odometry/rgbd_odometry_core.h>
-#include <opencv-3.3.1-dev/opencv2/core/types.hpp>
-#include <opencv-3.3.1-dev/opencv2/core/mat.hpp>
+#include <opencv2/core/types.hpp>
+#include <opencv2/core/mat.hpp>
 
 #ifdef HAVE_iGRAND
 #include <rgbd_odometry/opencv_function_dev.h>
@@ -234,7 +234,48 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
 bool RGBDOdometryCore::computeRelativePoseDirect(
         const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
         const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
-        Pose& global_delta_pose_estimate,
+        Eigen::Matrix4f& odometry_estimate, Eigen::Map<Eigen::Matrix<float, 6, 6>>& covariance,
+        int max_iterations_per_level, int start_level, int end_level) {
+    
+    bool error_decreased = false;
+    bool compute_image_gradients = true;
+    Eigen::Matrix4f local_odometry_estimate = odometry_estimate;
+    Eigen::Matrix<float, 6, 6> local_covariance = covariance;
+    
+    std::cout << "--- Reprojection Error Minimization ---\n";
+
+    for (int level = start_level; level >= end_level; --level) {
+
+        std::cout << "Level: " << level << std::endl;
+        
+        int sample_factor = std::pow(2, level);
+
+        cv::Mat sampled_depth_img1, sampled_color_img1;
+        cv::resize(depth_img1, sampled_depth_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
+        cv::resize(color_img1, sampled_color_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
+
+        bool level_error_decreased = this->computeRelativePoseDirect(
+            sampled_color_img1, sampled_depth_img1, color_img2, depth_img2, local_odometry_estimate, covariance, level, compute_image_gradients, max_iterations_per_level);
+
+        if (level_error_decreased) {
+            error_decreased = true;
+            odometry_estimate = local_odometry_estimate;
+            covariance = local_covariance;
+        }
+
+        if (compute_image_gradients)
+            compute_image_gradients = false;
+
+    }
+
+    return error_decreased;
+
+}
+
+bool RGBDOdometryCore::computeRelativePoseDirect(
+        const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
+        const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
+        Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
         int level = 0, bool compute_image_gradients = true, int max_iterations = 50) {
 
     // Inverse compositional image alignment with parallelization
@@ -242,14 +283,19 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
     if (not (color_img1.isContinuous() and depth_img1.isContinuous() and color_img2.isContinuous() and depth_img2.isContinuous()))
         throw std::runtime_error("Color and Depth cv::Mats must be continuous!");
 
-    Pose local_delta_pose_estimate = global_delta_pose_estimate;
-    local_delta_pose_estimate.invertInPlace();
-    Pose delta_pose_update, prev_local_delta_pose_estimate;
+    Pose local_odometry_estimate;
+    local_odometry_estimate.set(reinterpret_cast<cv::Matx44f&>(odometry_estimate).t());
+    local_odometry_estimate.invertInPlace();
+    Pose delta_pose_update, prev_odometry_estimate;
 
     int width1 = color_img1.cols;
     int height1 = color_img1.rows;
     int width2 = color_img2.cols;
     int height2 = color_img2.rows;
+    if (not this->hasRGBCameraIntrinsics()) {
+        throw std::runtime_error("Camera calibration parameters are not set. Odometry cannot be estimated.");
+        return false;
+    }
     cv::Mat intrinsics = this->getRGBCameraIntrinsics();
     float fx = intrinsics.at<float>(0, 0);
     float fy = intrinsics.at<float>(1, 1);
@@ -310,8 +356,8 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         iterations++;
 
         // get current transformation
-        rotation = local_delta_pose_estimate.getRotation_Matx33();
-        local_delta_pose_estimate.getTranslation(translation);
+        rotation = local_odometry_estimate.getRotation_Matx33();
+        local_odometry_estimate.getTranslation(translation);
 
         pixels_valid.setTo(false);
 
@@ -492,7 +538,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
 
         if (not(error_decreased and enough_constraints and param_update_valid)) { 
             // don't update the parameters, stop iterating now
-            local_delta_pose_estimate = prev_local_delta_pose_estimate;
+            local_odometry_estimate = prev_odometry_estimate;
             error = last_error;
             break;
         } else if (param_max <= 8e-6) { 
@@ -505,19 +551,20 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         }
 
         // update parameters via composition
-        prev_local_delta_pose_estimate = local_delta_pose_estimate;
+        prev_odometry_estimate = local_odometry_estimate;
         delta_pose_update.setFromTwist(cv::Vec3f((float *)param_update.data), 
                 cv::Vec3f((float *)param_update.data + 3));
         delta_pose_update.invertInPlace();
-        Pose::multiply(delta_pose_update, local_delta_pose_estimate, local_delta_pose_estimate);
+        Pose::multiply(delta_pose_update, local_odometry_estimate, local_odometry_estimate);
 
         last_error = error;
 
     }
 
     // invert the estimate that we return
-    local_delta_pose_estimate.invertInPlace();
-    global_delta_pose_estimate = local_delta_pose_estimate;
+    local_odometry_estimate.invertInPlace();
+    odometry_estimate = Eigen::Map<Eigen::Matrix<float, 4, 4, Eigen::RowMajor>>(local_odometry_estimate.getTransform().val);
+    covariance = Eigen::Map<Eigen::Matrix<float, 6, 6, Eigen::RowMajor>>((float *)error_hessian.data);
 
     std::cout << "Initial Error: " << initial_error << "\n";
     std::cout << "Final Error: " << error << "\n";
@@ -528,45 +575,6 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         return true;
     else
         return false;
-
-}
-
-bool RGBDOdometryCore::computeRelativePoseDirect(
-        const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
-        const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
-        Pose& global_delta_pose_estimate,
-        int max_iterations_per_level, int start_level, int end_level) {
-
-    Pose local_delta_pose_estimate = global_delta_pose_estimate;
-    bool error_decreased = false;
-    bool compute_image_gradients = true;
-
-    std::cout << "--- Reprojection Error Minimization ---\n";
-
-    for (int level = start_level; level >= end_level; --level) {
-
-        std::cout << "Level: " << level << std::endl;
-        
-        int sample_factor = std::pow(2, level);
-
-        cv::Mat sampled_depth_img1, sampled_color_img1;
-        cv::resize(depth_img1, sampled_depth_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
-        cv::resize(color_img1, sampled_color_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
-
-        bool level_error_decreased = this->computeRelativePoseDirect(
-            sampled_color_img1, sampled_depth_img1, color_img2, depth_img2, local_delta_pose_estimate, level, compute_image_gradients, max_iterations_per_level);
-
-        if (level_error_decreased) {
-            error_decreased = true;
-            global_delta_pose_estimate = local_delta_pose_estimate;
-        }
-
-        if (compute_image_gradients)
-            compute_image_gradients = false;
-
-    }
-
-    return error_decreased;
 
 }
 

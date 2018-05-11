@@ -100,16 +100,16 @@ public:
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
     
     bool computeRelativePoseDirect(
-            const cv::Mat& color_img1, const cv::Mat& depth_img1,
-            const cv::Mat& color_img2, const cv::Mat& depth_img2,
-            Pose& global_delta_pose_estimate,
-            int level, bool compute_image_gradients, int max_iterations);
-
+            const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
+            const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
+            Eigen::Matrix4f& odometry_estimate, Eigen::Map<Eigen::Matrix<float, 6, 6>>& covariance,
+            int max_iterations_per_level, int start_level, int end_level);
+    
     bool computeRelativePoseDirect(
-        const cv::Mat& color_img1, const cv::Mat& depth_img1,
-        const cv::Mat& color_img2, const cv::Mat& depth_img2,
-        Pose& global_delta_pose_estimate, 
-        int max_iterations_per_level, int start_level, int end_level);
+            const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
+            const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
+            Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
+            int level, bool compute_image_gradients, int max_iterations);
 
     int computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& dimg, cv::UMat& mask,
             std::string& name,

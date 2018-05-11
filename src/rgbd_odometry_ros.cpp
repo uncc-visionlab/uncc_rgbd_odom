@@ -292,7 +292,7 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         cv::Ptr<cv::UMat> descriptors_frame(new cv::UMat);
 #endif
         double cov[36];
-        Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
+        Eigen::Map<Eigen::Matrix<double, 6, 6>> covMatrix(cov);
         Eigen::Matrix4f trans;
         int numFeatures = 0, numMatches = 0, numInliers = 0;
 

@@ -21,6 +21,10 @@
 
 #include <boost/shared_ptr.hpp>
 
+// Eigen includes
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
+
 // OpenCV includes
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -33,9 +37,6 @@
 #include <pcl/registration/transformation_estimation_svd.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 
-// Eigen includes
-#include <Eigen/Dense>
-#include <Eigen/Geometry>
 
 #include <rgbd_odometry/image_function_dev.h>
 #include <rgbd_odometry/RobustMatcher.h>
@@ -75,7 +76,7 @@ public:
         rmatcher->setFeatureDetector(feature_detector);
         rmatcher->setDescriptorExtractor(feature_descriptor);
 
-        std::string depth_processing_str = "none";
+        std:reason_stopped = std::string(string depth_processing_str = "none";
         setDepthProcessing(depth_processing_str);
     }
 
@@ -99,10 +100,10 @@ public:
             Eigen::Matrix4f& trans,
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
     
-    bool computeRelativePoseDirect(
+    bool computeRelativePoseDirectMultiScale(
             const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
             const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
-            Eigen::Matrix4f& odometry_estimate, Eigen::Map<Eigen::Matrix<float, 6, 6>>& covariance,
+            Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
             int max_iterations_per_level, int start_level, int end_level);
     
     bool computeRelativePoseDirect(

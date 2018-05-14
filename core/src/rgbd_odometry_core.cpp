@@ -13,6 +13,7 @@
 #include <rgbd_odometry/rgbd_odometry_core.h>
 #include <opencv2/core/types.hpp>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/core/eigen.hpp>
 
 #ifdef HAVE_iGRAND
 #include <rgbd_odometry/opencv_function_dev.h>
@@ -231,10 +232,10 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
     //prior_keyframe_frameid_str = keyframe_frameid_str;
 }
 
-bool RGBDOdometryCore::computeRelativePoseDirect(
+bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(
         const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
         const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
-        Eigen::Matrix4f& odometry_estimate, Eigen::Map<Eigen::Matrix<float, 6, 6>>& covariance,
+        Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
         int max_iterations_per_level, int start_level, int end_level) {
     
     bool error_decreased = false;
@@ -255,7 +256,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         cv::resize(color_img1, sampled_color_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
 
         bool level_error_decreased = this->computeRelativePoseDirect(
-            sampled_color_img1, sampled_depth_img1, color_img2, depth_img2, local_odometry_estimate, covariance, level, compute_image_gradients, max_iterations_per_level);
+            sampled_color_img1, sampled_depth_img1, color_img2, depth_img2, local_odometry_estimate, local_covariance, level, compute_image_gradients, max_iterations_per_level);
 
         if (level_error_decreased) {
             error_decreased = true;
@@ -279,12 +280,14 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         int level = 0, bool compute_image_gradients = true, int max_iterations = 50) {
 
     // Inverse compositional image alignment with parallelization
-
+    
     if (not (color_img1.isContinuous() and depth_img1.isContinuous() and color_img2.isContinuous() and depth_img2.isContinuous()))
         throw std::runtime_error("Color and Depth cv::Mats must be continuous!");
-
+    
     Pose local_odometry_estimate;
-    local_odometry_estimate.set(reinterpret_cast<cv::Matx44f&>(odometry_estimate).t());
+    cv::Matx44f odometry_estimate_cv;
+    cv::eigen2cv(odometry_estimate, odometry_estimate_cv);
+    local_odometry_estimate.set(odometry_estimate_cv);
     local_odometry_estimate.invertInPlace();
     Pose delta_pose_update, prev_odometry_estimate;
 
@@ -297,10 +300,10 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         return false;
     }
     cv::Mat intrinsics = this->getRGBCameraIntrinsics();
-    float fx = intrinsics.at<float>(0, 0);
-    float fy = intrinsics.at<float>(1, 1);
-    float cx = intrinsics.at<float>(0, 2);
-    float cy = intrinsics.at<float>(1, 2);
+    const float& fx = intrinsics.at<float>(0, 0);
+    const float& fy = intrinsics.at<float>(1, 1);
+    const float& cx = intrinsics.at<float>(0, 2);
+    const float& cy = intrinsics.at<float>(1, 2);
     float inv_fx = 1/fx;
     float inv_fy = 1/fy;
     cv::Mat intensity_img1, intensity_img2;
@@ -325,7 +328,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
     int sample_factor = std::pow(2, level);
     std::vector<cv::Point3f> points1 = reconstructParallelized(depth_img1, cv::Point2f(fx, fy)/sample_factor, cv::Point2f(cx, cy)/sample_factor);
     cv::Mat ptcloud1(points1, false);
-    ptcloud1.reshape(3, height1);
+    ptcloud1 = ptcloud1.reshape(3, height1);
     
     cv::Matx33f rotation;
     cv::Vec3f translation;
@@ -338,7 +341,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
     cv::Mat error_grad(6, 1, CV_32F);
     float* error_grad_ptr = error_grad.ptr<float>(0, 0);
     cv::Mat param_update(6, 1, CV_32F);
-    cv::Mat error_hessian_double(6, 6, CV_32F);
+    cv::Mat error_hessian_double(6, 6, CV_64F);
     cv::Mat error_grad_double(6, 1, CV_64F);
     cv::Mat param_update_double(6, 1, CV_64F);
     float intensity_weight = 1.5;
@@ -365,7 +368,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
             // this lambda runs for each pixel and is parallelized
             [&](const cv::Vec3f& pt, const int* position) {
 
-                if (!std::isnan(pt[2])) {
+                if (not std::isnan(pt[2])) {
 
                     cv::Vec3f transformed_pt = rotation*pt + translation;
                     cv::Point2f warped_px;
@@ -403,7 +406,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
                         float depth2_grady_at_warped_px = y0w * (((float *)depth_img2_dy.data)[index_x0y0] * x0w + ((float *)depth_img2_dy.data)[index_x1y0] * x1w)  + 
                             y1w * (((float *)depth_img2_dy.data)[index_x0y1] * x0w + ((float *)depth_img2_dy.data)[index_x1y1] * x1w);
 
-                        if (!std::isnan(depth_img2_at_warped_px) && !std::isnan(depth2_gradx_at_warped_px) && !std::isnan(depth2_grady_at_warped_px)) {
+                        if (not std::isnan(depth_img2_at_warped_px) and not std::isnan(depth2_gradx_at_warped_px) and not std::isnan(depth2_grady_at_warped_px)) {
 
                             // interpolate intensity related values
                             float intensity_img2_at_warped_px = y0w * (((float *)intensity_img2.data)[index_x0y0] * x0w + ((float *)intensity_img2.data)[index_x1y0] * x1w)  + 
@@ -533,7 +536,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
             }
 
         } else {
-            std::cout << "Error increased.";
+            reason_stopped = std::string("Error increased.");
         }
 
         if (not(error_decreased and enough_constraints and param_update_valid)) { 

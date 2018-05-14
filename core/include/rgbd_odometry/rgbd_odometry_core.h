@@ -76,7 +76,7 @@ public:
         rmatcher->setFeatureDetector(feature_detector);
         rmatcher->setDescriptorExtractor(feature_descriptor);
 
-        std:reason_stopped = std::string(string depth_processing_str = "none";
+        std::string depth_processing_str = "none";
         setDepthProcessing(depth_processing_str);
     }
 

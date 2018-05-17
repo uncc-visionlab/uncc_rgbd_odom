@@ -3,6 +3,7 @@
 <launch>
     
     <arg name="run_rviz" default="true"/>
+    <arg name="rviz_config" default="uncc_rgbd_odom.rviz"/>
     <arg name="run_rgbd_odometry_node" default="true"/>
     <arg name="run_odometry_analysis_node" default="false"/>    
             
@@ -20,10 +21,15 @@
     <arg name="sensor_type_kinect_xboxOne" default="false" />
 
     <!-- parameters for real-time rviz visualization -->
-        
+    <include if="$(arg sensor_type_xtion)" file="$(find openni2_launch)/launch/openni2.launch"/>
+    <include if="$(arg sensor_type_astra)" file="$(find astra_launch)/launch/astra.launch"/>
+                
     <group ns="$(arg camera)">
-        <node name="uncc_rgbd_odometry" pkg="uncc_rgbd_odometry" 
-              type="uncc_rgbd_odometry" output="screen" if="$(arg run_rgbd_odometry_node)">           
+        <node name="uncc_rgbd_odom" pkg="uncc_rgbd_odom" 
+              type="uncc_rgbd_odom" output="screen" if="$(arg run_rgbd_odometry_node)">
+            <!-- <remap from="rgb/camera_info" to="rgb/camera_info"/> -->
+            <remap from="rgb/input_image" to="rgb/image_raw"/>
+            <remap from="depth_registered/input_image" to="depth/image_raw"/>
             <param name="optical_parent" value = "$(arg rgb_optical_frame)"/>
             <param name="optical_frame" value = "$(arg rgbd_frame)"/>
 
@@ -44,7 +50,7 @@
     </group> 
 
     <node pkg="rviz" type="rviz" name="rviz" output="screen" 
-          args="" if="$(arg run_rviz)"/> 
+          args="-d $(find uncc_rgbd_odom)/rviz/$(arg rviz_config)" if="$(arg run_rviz)"/> 
     <!--
     <node name="map_to_base" pkg="tf" 
           type="static_transform_publisher"  

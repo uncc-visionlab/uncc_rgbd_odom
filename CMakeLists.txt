@@ -188,14 +188,14 @@ link_directories(/opt/ros/kinetic/lib)
 #    ${Boost_LIBRARIES} 
 #    ${OpenCV_LIBS})
 
-add_executable(${PROJECT_NAME}_run 
+add_executable(${PROJECT_NAME}
 #                src/rgbd_odometry_core.cpp
                 src/rgbd_odometry_ros.cpp)
 #                src/RobustMatcher.cpp
 #                src/image_function_dev.cpp
 #                src/opencv_function_dev.cpp)
 
-target_link_libraries(${PROJECT_NAME}_run
+target_link_libraries(${PROJECT_NAME}
     ${catkin_LIBRARIES} 
     ${Boost_LIBRARIES} 
     ${OpenCV_LIBS}

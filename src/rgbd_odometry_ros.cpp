@@ -220,7 +220,7 @@ void RGBDOdometryEngine::tofGreyImageCallback(const sensor_msgs::ImageConstPtr& 
 // Detectors/Descriptors: ORB, SIFT, SURF, BRISK
 //  Detector-only algorithms: FAST, GFTT
 //  Descriptor-only algorithms: BRIEF 
-#define NUM_TESTS 2
+#define NUM_TESTS 1
 int trackedIdx = 0;
 #ifdef PERFORMANCE_EVAL
 std::string odomAlgorithmPairs[NUM_TESTS][2] = {
@@ -301,7 +301,7 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
                 trans, covMatrix,
                 detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
                 numFeatures, numMatches, numInliers);
-
+        std::cout << "trans=\n" << trans << std::endl;
         if (!odomEstimatorSuccess) {
             return;
         }
@@ -426,7 +426,7 @@ int main(int argc, char **argv) {
      * You must call one of the versions of ros::init() before using any other
      * part of the ROS system.
      */
-    ros::init(argc, argv, "rgbd_odometry");
+    ros::init(argc, argv, "uncc_rgbd_odom");
     /**
      * NodeHandle is the main access point to communications with the ROS system.
      * The first NodeHandle constructed will fully initialize this node, and the last

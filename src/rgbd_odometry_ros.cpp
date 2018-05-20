@@ -41,6 +41,7 @@
 
 // Includes for this Library
 #include <rgbd_odometry/rgbd_odometry_ros.h>
+#include <cv_bridge/cv_bridge.h>
 
 void toString(pcl::PointXYZRGB& ptrgb) {
     ROS_INFO("x,y,z=(%f,%f,%f) r,g,b=(%d,%d,%d)",
@@ -203,6 +204,136 @@ void RGBDOdometryEngine::changePose(tf::Transform xform) {
             frame_time, parent_frame_id_str, rgbd_frame_id_str));
 }
 
+std::pair<cv::Mat, cv::Mat> RGBDOdometryEngine::cameraInfoToMats(const sensor_msgs::CameraInfoConstPtr& camera_info, bool rectified) {
+
+    cv::Mat camera_matrix(3, 3, CV_32FC1);
+    cv::Mat distortion_coeffs(5, 1, CV_32FC1);
+
+    if (rectified) {
+
+        camera_matrix.at<float>(0, 0) = camera_info->P[0];
+        camera_matrix.at<float>(0, 1) = camera_info->P[1];
+        camera_matrix.at<float>(0, 2) = camera_info->P[2];
+        camera_matrix.at<float>(1, 0) = camera_info->P[4];
+        camera_matrix.at<float>(1, 1) = camera_info->P[5];
+        camera_matrix.at<float>(1, 2) = camera_info->P[6];
+        camera_matrix.at<float>(2, 0) = camera_info->P[8];
+        camera_matrix.at<float>(2, 1) = camera_info->P[9];
+        camera_matrix.at<float>(2, 2) = camera_info->P[10];
+
+        for (int i = 0; i < 5; ++i)
+            distortion_coeffs.at<float>(i, 0) = 0;
+
+    } else {
+
+        for (int i = 0; i < 9; ++i) {
+            camera_matrix.at<float>(i / 3, i % 3) = camera_info->K[i];
+        }
+        for (int i = 0; i < 5; ++i) {
+            distortion_coeffs.at<float>(i, 0) = camera_info->D[i];
+        }
+
+    }
+
+    return std::make_pair(camera_matrix, distortion_coeffs);
+
+}
+
+void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_msg,
+        const sensor_msgs::ImageConstPtr& rgb_msg,
+        const sensor_msgs::CameraInfoConstPtr& info_msg) {
+
+
+    ros::Time timestamp = depth_msg->header.stamp;
+    static int frame_id = 0;
+    //ROS_DEBUG("Heard rgbd image.");
+    frame_time = depth_msg->header.stamp;
+    std::string keyframe_frameid_str("frame_");
+    keyframe_frameid_str.append(stdpatch::to_string(frame_id++));
+
+    cv_bridge::CvImageConstPtr rgb_img_ptr = cv_bridge::toCvShare(rgb_msg, sensor_msgs::image_encodings::BGR8);
+    cv_bridge::CvImageConstPtr depth_img_ptr;
+    if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1) {
+        depth_img_ptr = cv_bridge::toCvShare(depth_msg, sensor_msgs::image_encodings::TYPE_16UC1);
+    } else if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1) {
+        depth_img_ptr = cv_bridge::toCvShare(depth_msg, sensor_msgs::image_encodings::TYPE_32FC1);
+    }
+    if (depth_msg->width != rgb_msg->width || depth_msg->height != rgb_msg->height) {
+        ROS_ERROR("Depth and RGB image dimensions don't match depth=( %dx%d ) rgb=( %dx%d )!",
+                depth_msg->width, depth_msg->height, rgb_msg->width, rgb_msg->height);
+    }
+
+    if (!hasRGBCameraIntrinsics()) {
+        cv::Mat cameraMatrix, distortionCoeffs;
+        std::tie(cameraMatrix, distortionCoeffs) = cameraInfoToMats(info_msg, false);
+
+        float cx = cameraMatrix.at<float>(0, 2);
+        float cy = cameraMatrix.at<float>(1, 2);
+        float fx = cameraMatrix.at<float>(0, 0);
+        float fy = cameraMatrix.at<float>(1, 1);
+        setRGBCameraIntrinsics(cameraMatrix);
+    }
+
+    Eigen::Matrix4f trans;
+    double cov[36];
+    Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
+    cv::UMat depthimg = depth_img_ptr->image.getUMat(cv::ACCESS_READ);
+    cv::UMat frame = rgb_img_ptr->image.getUMat(cv::ACCESS_READ);
+    bool odomEstimatorSuccess = computeRelativePose(frame, depthimg, trans, covMatrix);
+    std::cout << "trans=\n" << trans << std::endl;
+    if (!odomEstimatorSuccess) {
+        return;
+    }
+    Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
+    Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
+
+    if (initializationDone) {
+        tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
+        tf::Transform xform(tf_quat,
+                tf::Vector3(translation[0], translation[1], translation[2]));
+        tf::StampedTransform xformStamped(xform, frame_time, keyframe_frameid_str, keyframe_frameid_str);
+        geometry_msgs::TransformStamped gxform;
+        tf::transformStampedTFToMsg(xformStamped, gxform);
+        gxform.header.frame_id = keyframe_frameid_str;
+        // publish geometry_msgs::pose with covariance message
+        geometry_msgs::PoseWithCovarianceStamped pose_w_cov_msg;
+        geometry_msgs::PoseWithCovarianceStamped odom_w_cov_msg;
+        geometry_msgs::TransformStamped pose_transform;
+        tf::Transform new_pose;
+        new_pose.mult(rgbd_pose, xform);
+        tf::StampedTransform new_pose_stamped(new_pose, frame_time, "pose", "");
+        tf::transformStampedTFToMsg(new_pose_stamped, pose_transform);
+        pose_w_cov_msg.pose.pose.orientation = pose_transform.transform.rotation;
+        pose_w_cov_msg.pose.pose.position.x = pose_transform.transform.translation.x;
+        pose_w_cov_msg.pose.pose.position.y = pose_transform.transform.translation.y;
+        pose_w_cov_msg.pose.pose.position.z = pose_transform.transform.translation.z;
+        for (int offset = 0; offset < 36; offset++) {
+            pose_w_cov_msg.pose.covariance[offset] = cov[offset];
+        }
+        pose_w_cov_msg.header.stamp = frame_time;
+        pose_w_cov_msg.header.frame_id = keyframe_frameid_str;
+        pubPose_w_cov.publish(pose_w_cov_msg);
+
+        odom_w_cov_msg.pose.pose.orientation = gxform.transform.rotation;
+        odom_w_cov_msg.pose.pose.position.x = gxform.transform.translation.x;
+        odom_w_cov_msg.pose.pose.position.y = gxform.transform.translation.y;
+        odom_w_cov_msg.pose.pose.position.z = gxform.transform.translation.z;
+        for (int offset = 0; offset < 36; offset++) {
+            odom_w_cov_msg.pose.covariance[offset] = cov[offset];
+        }
+        odom_w_cov_msg.header.stamp = frame_time;
+        odom_w_cov_msg.header.frame_id = keyframe_frameid_str;
+        pubOdom_w_cov.publish(odom_w_cov_msg);
+
+        // publish current estimated pose to tf and update current pose estimate
+        changePose(xform);
+
+        // publish geometry_msgs::StampedTransform message
+        pubXforms.publish(gxform);
+    }
+    prior_keyframe_frameid_str = keyframe_frameid_str;
+}
+
 void RGBDOdometryEngine::tofRGBImageCallback(const sensor_msgs::ImageConstPtr& x_msg,
         const sensor_msgs::ImageConstPtr& y_msg,
         const sensor_msgs::ImageConstPtr& z_msg,
@@ -292,7 +423,7 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         cv::Ptr<cv::UMat> descriptors_frame(new cv::UMat);
 #endif
         double cov[36];
-        Eigen::Map<Eigen::Matrix<double, 6, 6>> covMatrix(cov);
+        Eigen::Map<Eigen::Matrix<double, 6, 6 >> covMatrix(cov);
         Eigen::Matrix4f trans;
         int numFeatures = 0, numMatches = 0, numInliers = 0;
 
@@ -407,7 +538,9 @@ void RGBDOdometryEngine::initializeSubscribersAndPublishers() {
             <sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo> MyApproximateSyncPolicy;
     static message_filters::Synchronizer<MyApproximateSyncPolicy> syncApprox(MyApproximateSyncPolicy(queue_size),
             sub_depthImage, sub_rgbImage, sub_rgbCameraInfo);
-    syncApprox.registerCallback(boost::bind(&RGBDOdometryEngine::rgbdImageCallback,
+    //syncApprox.registerCallback(boost::bind(&RGBDOdometryEngine::rgbdImageCallback,
+    //        this, _1, _2, _3));
+    syncApprox.registerCallback(boost::bind(&RGBDOdometryEngine::rgbdCallback,
             this, _1, _2, _3));
 
     pubXforms = nodeptr->advertise<geometry_msgs::TransformStamped>("relative_xform", 1000);

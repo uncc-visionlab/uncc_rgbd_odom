@@ -196,8 +196,9 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
                 numFeatures, numMatches, numInliers,
                 quat, translation,
                 trans, covMatrix);
-    }
+    }    
     //prior_keyframe_frameid_str = keyframe_frameid_str;
+    return odomEstimatorSuccess;
 }
 
 bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA,
@@ -230,6 +231,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
                 trans, covMatrix);
     }
     //prior_keyframe_frameid_str = keyframe_frameid_str;
+    return odomEstimatorSuccess;
 }
 
 bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(

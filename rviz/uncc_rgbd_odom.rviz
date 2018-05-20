@@ -6,6 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /Image1
+        - /Image2
       Splitter Ratio: 0.5
     Tree Height: 193
   - Class: rviz/Selection
@@ -50,7 +52,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /camera/rgb/image_raw
+      Image Topic: /camera/depth_registered/input_image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -62,7 +64,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /camera/depth/image
+      Image Topic: /camera/rgb/input_image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -77,16 +79,6 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        camera_depth_frame:
-          Value: true
-        camera_depth_optical_frame:
-          Value: true
-        camera_link:
-          Value: true
-        camera_rgb_frame:
-          Value: true
-        camera_rgb_optical_frame:
-          Value: true
         optitrack:
           Value: true
         rgb_optical_frame:

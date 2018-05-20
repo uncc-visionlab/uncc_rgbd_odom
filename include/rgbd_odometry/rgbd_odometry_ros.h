@@ -52,7 +52,7 @@ class RGBDOdometryEngine : public RGBDOdometryCore {
 public:
     typedef boost::shared_ptr<RGBDOdometryEngine> Ptr;
 
-    RGBDOdometryEngine() : 
+    RGBDOdometryEngine() :
     RGBDOdometryCore(),
     nodeptr(new ros::NodeHandle),
     nh("~"),
@@ -122,6 +122,12 @@ public:
     void tf_truth_Callback(const geometry_msgs::TransformStampedConstPtr& tf_truth);
     // UNCOMMENT WHEN USING vrpn_client_ros 
     //    void tf_truth_Callback(const geometry_msgs::PoseStampedConstPtr& tf_truth);
+
+    std::pair<cv::Mat, cv::Mat> cameraInfoToMats(const sensor_msgs::CameraInfoConstPtr& camera_info, bool rectified);
+
+    void rgbdCallback(const sensor_msgs::ImageConstPtr& depth_msg,
+            const sensor_msgs::ImageConstPtr& rgb_msg,
+            const sensor_msgs::CameraInfoConstPtr& info_msg);
 
     void rgbdImageCallback(const sensor_msgs::ImageConstPtr& depth_msg,
             const sensor_msgs::ImageConstPtr& rgb_msg_in,

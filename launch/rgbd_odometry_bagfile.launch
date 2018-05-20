@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tools to change and view node example output. -->
+<launch>
+    
+    <arg name="run_rviz" default="true"/>
+    <arg name="rviz_config" default="uncc_rgbd_odom.rviz"/>
+    <arg name="run_rgbd_odometry_node" default="true"/>
+    <arg name="run_odometry_analysis_node" default="false"/>    
+            
+    <arg name="bagfile_path_A" default="/server/data/bagfiles/rgbd3f.bag"/>
+    <arg name="bagfile_path_B" default="$(env HOME)/bagfiles/rgbd3f.bag"/>
+    <arg name="bagfile_path_C" default="$(env HOME)/bagfiles/rgbd_dataset_freiburg1_room_validation.bag"/>
+    <arg name="bagfile_path" default="$(arg bagfile_path_B)"/>
+    <arg name="bagfile_playback_rate" default="0.5"/>
+
+    <arg name="camera" default="camera" />
+    <arg name="map_frame" default="optitrack" />
+    <arg name="base_link" default="base_link" />
+    <arg name="rgb_optical_frame" default="rgb_optical_frame" />    
+    <arg name="rgbd_frame" default="rgbd_frame" />
+                
+    <group ns="$(arg camera)">
+        <node name="uncc_rgbd_odom" pkg="uncc_rgbd_odom" 
+              type="uncc_rgbd_odom" output="screen" if="$(arg run_rgbd_odometry_node)">
+
+            <!-- re-mappings for UNC Charlotte bag data (default) -->
+            <!-- <remap from="rgb/input_image" to="rgb/image_raw"/>
+            <remap from="depth_registered/input_image" to="depth_registered/image_raw"/>
+            <remap from="camera_info_topic" to="/camera/rgb/camera_info"/> -->
+            <!-- re-mappings for U. of Freiburg bag data -->
+            <!-- <remap from="rgb/input_image" to="/camera/rgb/image_color"/>
+            <remap from="depth_registered/input_image" to="/camera/depth/image"/>
+            <remap from="camera_info_topic" to="/camera/rgb/camera_info"/> -->
+
+            <param name="optical_parent" value = "$(arg rgb_optical_frame)"/>
+            <param name="optical_frame" value = "$(arg rgbd_frame)"/>
+
+            <param name="tf_truth_initialize"  value = "false"/>
+            <param name="tf_truth_topic"       value = ""/>
+            <param name="tf_truth_init_time"   value = "0"/>
+            <param name="calibration_pose"     value = ""/> 
+            <!-- valid depth_processing values are "moving_average", "dither", "none" -->
+            <!-- <param name="depth_processing"     value = "dither"/> -->
+            <param name="depth_processing"     value = "none"/>
+            <!-- Detectors/Descriptors: ORB, SIFT, SURF, BRISK -->
+            <!-- Detector-only algorithms: FAST, GFTT -->
+            <param name="feature_detector"     value = "ORB"/>
+            <!-- Detectors/Descriptors: ORB, SIFT, SURF, BRISK -->
+            <!-- Descriptor-only algorithms: BRIEF -->
+            <param name="feature_descriptor"   value = "ORB"/>
+        </node>
+    </group> 
+
+    <param name="use_sim_time" value="true" />
+    <node pkg="rosbag" type="play" name="player" output="screen" args="-r $(arg bagfile_playback_rate) --clock --quiet --keep-alive $(arg bagfile_path)"/>
+
+    <node pkg="rviz" type="rviz" name="rviz" output="screen" 
+          args="-d $(find uncc_rgbd_odom)/rviz/$(arg rviz_config)" if="$(arg run_rviz)"/> 
+    <!--
+    <node name="map_to_base" pkg="tf" 
+          type="static_transform_publisher"  
+          args="0.0 -0.5 0.0  0 0 0 1 $(arg rgbd_frame) $(arg base_link) 100" />
+    -->
+    <node name="base_to_optical" pkg="tf" 
+          type="static_transform_publisher"  
+          args="0.0 0.0 0.5  0.5 -0.5 0.5 -0.5 $(arg map_frame) $(arg rgb_optical_frame) 100" />
+
+    
+</launch>

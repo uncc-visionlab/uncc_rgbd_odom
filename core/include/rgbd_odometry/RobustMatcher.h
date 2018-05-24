@@ -14,8 +14,10 @@
 #include <boost/shared_ptr.hpp>
 
 #include <opencv2/features2d.hpp>
+#ifdef HAVE_OPENCV_NONFREE   
 #include <opencv2/xfeatures2d.hpp>
 #include <opencv2/xfeatures2d/nonfree.hpp>
+#endif
 
 #include <opencv2/flann/flann.hpp>
 #include <opencv2/flann/dist.h>
@@ -41,16 +43,21 @@ public:
         factory["iGRAND"] = create_iGRAND; // ORB is the default feature
 #endif
         factory["ORB"] = create_ORB; // ORB is the default feature
+#ifdef HAVE_OPENCV_NONFREE   
         factory["SIFT"] = create_SIFT;
         factory["SURF"] = create_SURF;
+        factory["BRIEF"] = create_BRIEF; // only a descriptor extractor
+        factory["FREAK"] = create_FREAK; // only an extractor, not working
+        //factory["LUCID"] = create_LUCID; // only an extractor, not working
+        //factory["LATCH"] = create_LATCH; // only an extractor, not working
+        //factory["DAISY"] = create_DAISY; // only an extractor, not working
+#endif
         factory["BRISK"] = create_BRISK;
         //factory["MSER"] = create_MSER;   // not working
         //factory["KAZE"] = create_KAZE;   // not working
         //factory["AKAZE"] = create_AKAZE; // not working  
-        factory["BRIEF"] = create_BRIEF; // only a descriptor extractor
         factory["GFTT"] = create_GFTT; // only a detector
         factory["FAST"] = create_FAST; // only a detector
-        //factory["FREAK"] = create_FREAK; // only an extractor, not working
         //factory["STAR"] = create_STAR;   // only a detector, not working
 
 
@@ -84,7 +91,7 @@ public:
     // Set the descriptor extractor
 
     void setDescriptorExtractor(std::string extractor_name) {
-        descriptorStr = extractor_name;        
+        descriptorStr = extractor_name;
         cv::Ptr<cv::DescriptorExtractor> new_extractor_ =
                 factory[extractor_name]().dynamicCast<cv::DescriptorExtractor>();
         if (new_extractor_) {
@@ -151,12 +158,13 @@ private:
     // so the function pointers can not be unified.
 
 #ifdef HAVE_iGRAND
+
     static cv::Ptr<cv::Algorithm> create_iGRAND() {
         cv::Ptr<cv::Algorithm> algo_ptr = cv::iGRAND::create(MAX_KEYPOINTS);
         return algo_ptr;
     };
 #endif
-    
+
     static cv::Ptr<cv::Algorithm> create_ORB() {
         //        return cv::ORB::create();
         cv::Ptr<cv::Algorithm> algo_ptr = cv::ORB::create(MAX_KEYPOINTS);
@@ -165,6 +173,8 @@ private:
         return algo_ptr;
     };
 
+#if HAVE_OPENCV_NONFREE
+
     static cv::Ptr<cv::Algorithm> create_SIFT() {
         return cv::xfeatures2d::SIFT::create(MAX_KEYPOINTS);
     };
@@ -172,6 +182,27 @@ private:
     static cv::Ptr<cv::Algorithm> create_SURF() {
         return cv::xfeatures2d::SURF::create();
     };
+
+    static cv::Ptr<cv::Algorithm> create_BRIEF() {
+        return cv::xfeatures2d::BriefDescriptorExtractor::create();
+    };
+
+    static cv::Ptr<cv::Algorithm> create_FREAK() {
+        return cv::xfeatures2d::FREAK::create();
+    }
+
+    static cv::Ptr<cv::Algorithm> create_LUCID() {
+        return cv::xfeatures2d::LUCID::create(3, 3);
+    };
+
+    static cv::Ptr<cv::Algorithm> create_LATCH() {
+        return cv::xfeatures2d::LATCH::create();
+    };
+
+    static cv::Ptr<cv::Algorithm> create_DAISY() {
+        return cv::xfeatures2d::DAISY::create();
+    };
+#endif
 
     static cv::Ptr<cv::Algorithm> create_BRISK() {
         return cv::BRISK::create();
@@ -184,10 +215,6 @@ private:
 
     static cv::Ptr<cv::Algorithm> create_GFTT() {
         return cv::GFTTDetector::create(MAX_KEYPOINTS);
-    };
-
-    static cv::Ptr<cv::Algorithm> create_BRIEF() {
-        return cv::xfeatures2d::BriefDescriptorExtractor::create();
     };
 
     // below: not working
@@ -206,10 +233,6 @@ private:
         return cv::MSER::create();
     };
 
-    static cv::Ptr<cv::Algorithm> create_FREAK() {
-        return cv::xfeatures2d::FREAK::create();
-    };
-
     static cv::Ptr<cv::Algorithm> create_KAZE() {
         return cv::KAZE::create();
     };
@@ -222,18 +245,6 @@ private:
 
     static cv::Ptr<cv::Algorithm> create_AGAST() {
         return cv::AgastFeatureDetector::create();
-    };
-
-    static cv::Ptr<cv::Algorithm> create_LUCID() {
-        return cv::xfeatures2d::LUCID::create(3, 3);
-    };
-
-    static cv::Ptr<cv::Algorithm> create_LATCH() {
-        return cv::xfeatures2d::LATCH::create();
-    };
-
-    static cv::Ptr<cv::Algorithm> create_DAISY() {
-        return cv::xfeatures2d::DAISY::create();
     };
 
     static cv::Ptr<cv::DescriptorMatcher> createMatcher(cv::Ptr<cv::Feature2D> algo) {

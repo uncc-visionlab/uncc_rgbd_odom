@@ -50,7 +50,8 @@ find_package(catkin REQUIRED roscpp rospy genmsg std_msgs geometry_msgs sensor_m
              cv_bridge image_geometry image_proc image_transport nodelet 
 # freenect_launch not available for jade on ubuntu yet 1/4/2016
 #             tf2 tf2_ros pcl_ros freenect_launch openni2_launch rgbd_launch)
-             tf2 tf2_ros pcl_ros openni2_launch rgbd_launch rgbd_drivers_uncc)
+#             tf2 tf2_ros pcl_ros openni2_launch rgbd_launch rgbd_drivers_uncc)
+             tf2 tf2_ros pcl_ros rgbd_drivers_uncc)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -58,13 +59,6 @@ find_package(cmake_modules REQUIRED)
 find_package(Boost REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
-if (OpenCV_VERSION_MAJOR VERSION_EQUAL "3")
-  add_definitions("-DOPENCV3=1")
-else()
-  MESSAGE( STATUS "Found OpenCV_VERSION: " ${OpenCV_VERSION})
-  MESSAGE( STATUS "Found OpenCV_VERSION_MAJOR: " ${OpenCV_VERSION_MAJOR})
-  MESSAGE(FATAL_ERROR "OpenCV >= 3.0 is required to build this package.")
-endif()
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -175,7 +169,8 @@ include_directories(
         ${PCL_INCLUDE_DIRS}
 )
 
-link_directories(/opt/ros/kinetic/lib)
+link_directories(/opt/ros/kinetic/lib
+    /home/arwillis/astra/OpenNI-Linux-x64-2.3/Redist) # needed to find OpenNI2Orbbec
 
 #add_library(${PROJECT_NAME}
 #                src/rgbd_odometry_core.cpp

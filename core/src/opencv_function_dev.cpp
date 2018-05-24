@@ -12,7 +12,7 @@
 #include <opencv2/core/ocl.hpp>
 
 #include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d/nonfree.hpp>
+//#include <opencv2/xfeatures2d/nonfree.hpp>
 
 #include <rgbd_odometry/opencv_function_dev.h>
 

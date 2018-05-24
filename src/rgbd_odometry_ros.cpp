@@ -287,7 +287,7 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
     Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
     Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
 
-    if (initializationDone) {
+    if (initializationDone || true) {
         tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
         tf::Transform xform(tf_quat,
                 tf::Vector3(translation[0], translation[1], translation[2]));

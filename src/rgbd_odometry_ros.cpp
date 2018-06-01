@@ -90,7 +90,7 @@ void RGBDOdometryEngine::tf_truth_Callback(const geometry_msgs::TransformStamped
 
     static tf::TransformListener listener;
     tf::StampedTransform calib_marker_pose;
-    if (DEBUG) {
+    if (VERBOSE) {
         ROS_INFO("Looking up transform from frame '%s' to frame '%s'", parent_frame_id_str.c_str(),
                 calib_frame_id_str.c_str());
     }
@@ -245,7 +245,9 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
 
     ros::Time timestamp = depth_msg->header.stamp;
     static int frame_id = 0;
-    //ROS_DEBUG("Heard rgbd image.");
+    if (VERBOSE) {
+        ROS_DEBUG("Heard rgbd image.");
+    }
     frame_time = depth_msg->header.stamp;
     std::string keyframe_frameid_str("frame_");
     keyframe_frameid_str.append(stdpatch::to_string(frame_id++));
@@ -279,7 +281,6 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
     cv::UMat depthimg = depth_img_ptr->image.getUMat(cv::ACCESS_READ);
     cv::UMat frame = rgb_img_ptr->image.getUMat(cv::ACCESS_READ);
     bool odomEstimatorSuccess = computeRelativePose(frame, depthimg, trans, covMatrix);
-    std::cout << "trans=\n" << trans << std::endl;
 
     Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
     Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
@@ -370,18 +371,12 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         const sensor_msgs::ImageConstPtr& rgb_msg_in,
         const sensor_msgs::CameraInfoConstPtr& info_msg) {
     static int frame_id = 0;
-    ROS_DEBUG("Heard rgbd image.");
+    if (VERBOSE) {
+        ROS_DEBUG("Heard rgbd image.");
+    }
     frame_time = depth_msg->header.stamp;
     std::string keyframe_frameid_str("frame_");
     keyframe_frameid_str.append(stdpatch::to_string(frame_id++));
-    //    if (COMPUTE_PTCLOUDS) {
-    //        ptcloud_sptr.reset(new sensor_msgs::PointCloud2);
-    //        depth_image_proc::PointCloudXyzrgbNodelet nodelet(ptcloud_sptr);
-    //        nodelet.imageCb(depth_msg, rgb_msg_in, info_msg);
-    //        pcl_ptcloud_sptr.reset(new pcl::PointCloud<pcl::PointXYZRGB>);
-    //        pcl::fromROSMsg(*ptcloud_sptr, *pcl_ptcloud_sptr);
-    //        ROS_DEBUG("PCL point cloud computed for frame %d.", frame_id);
-    //    }
     depth_encoding = depth_msg->encoding;
     cv_rgbimg_ptr = cv_bridge::toCvShare(rgb_msg_in, sensor_msgs::image_encodings::BGR8);
     if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1) {
@@ -395,7 +390,9 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
     }
     model_.fromCameraInfo(info_msg);
     frame_id_str = keyframe_frameid_str;
-    ROS_DEBUG("Computing relative pose for frame id %d.", frame_id);
+    if (VERBOSE) {
+        ROS_DEBUG("Computing relative pose for frame id %d.", frame_id);
+    }
 
     // pointer to the feature point detector object
     //cv::Ptr<cv::FeatureDetector> detector_;

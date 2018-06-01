@@ -859,10 +859,10 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
 
     // Preprocess: Stop execution if not enough keypoints detected
     if (keypoints_frame->size() < 10) {
-        printf("Too few keypoints! Bailing on image...");
+        std::cout << "Too few keypoints! Bailing on image...";
         bad_frames++;
         if (bad_frames > 2) {
-            printf(" and Re-initializing the estimator.");
+            std::cout << " and re-initializing the estimator." << std::endl;
             prior_image = frame.clone();
             swapOdometryBuffers();
         }
@@ -871,8 +871,10 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
 
     // Step 1: Create a PCL point cloud object from newly detected feature points having matches/correspondence
     // Output: pcl_ptcloud_sptr -- a 3D point cloud of the 3D surface locations at all detected keypoints
+    if (VERBOSE) {
+        std::cout << "Found " << keypoints_frame->size() << " key points in frame." << std::endl;
+    }
     int i = 0;
-    std::cout << "Found " << keypoints_frame->size() << " key points in frame." << std::endl;
     std::vector<cv::KeyPoint>::iterator keyptIterator;
     for (keyptIterator = keypoints_frame->begin();
             keyptIterator != keypoints_frame->end(); ++keyptIterator) {
@@ -913,20 +915,20 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     } else {
         rmatcher->robustMatch(good_matches, *prior_descriptors_, *descriptors_frame);
     }
-    //if (DEBUG) {
-    std::cout << "from (" << prior_keypoints->size() << "," << keypoints_frame->size() << ")"
-            << " key points found " << good_matches.size() << " good matches." << std::endl;
-    //}
+    if (VERBOSE) {
+        std::cout << "from (" << prior_keypoints->size() << "," << keypoints_frame->size() << ")"
+                << " key points found " << good_matches.size() << " good matches." << std::endl;
+    }
     // measure performance of matching algorithm
     match_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
 
     // Preprocess: Stop execution unless enough matches exist to continue the algorithm.
     numMatches = good_matches.size();
     if (good_matches.size() < 6) {
-        printf("Too few key point matches in the images! Bailing on image...");
+        std::cout << "Too few key point matches in the images! Bailing on image...";
         bad_frames++;
         if (bad_frames > 2) {
-            printf(" and Re-initializing the estimator.");
+            std::cout << " and re-initializing the estimator.";
             prior_image = frame.clone();
             swapOdometryBuffers();
         }
@@ -980,50 +982,13 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     std::vector<cv::Point2f> list_points2d_scene_match; // container for the model 2D coordinates found in the scene    
     pcl::CorrespondencesPtr ptcloud_matches(new pcl::Correspondences());
     for (unsigned int match_index = 0; match_index < good_matches.size(); ++match_index) {
-        cv::Point2f point2d_prior = (*prior_keypoints)[ good_matches[match_index].queryIdx ].pt; // 2D point from model
-        cv::Point2f point2d_frame = (*keypoints_frame)[ good_matches[match_index].trainIdx ].pt; // 2D point from the scene
-        //                list_points2d_prior_match.push_back(point2d_prior); // add 3D point
-        //                list_points2d_scene_match.push_back(point2d_frame); // add 2D point
-        if (false && (std::isnan(point2d_frame.x) || std::isnan(point2d_frame.y) ||
-                point2d_frame.x > pcl_ptcloud_sptr->width ||
-                point2d_frame.y > pcl_ptcloud_sptr->height)) {
-
-            printf("Frame coord out of range for index pair (%d,%d) ! (x,y)=(%f,%f) (width,height)=(%d,%d)",
-                    good_matches[match_index].trainIdx, good_matches[match_index].queryIdx,
-                    point2d_frame.x, point2d_frame.y,
-                    pcl_ptcloud_sptr->width, pcl_ptcloud_sptr->height);
-        }
-        //        if (COMPUTE_PTCLOUDS) {
-        //            pcl::Correspondence correspondence(toIndex(pcl_ptcloud_sptr, point2d_frame.x, point2d_frame.y),
-        //                    toIndex(prior_ptcloud_sptr, point2d_prior.x, point2d_prior.y),
-        //                    good_matches[match_index].distance);
-        //            ptcloud_matches->push_back(correspondence);
-        //        } else {
-        // std::cout << "distance " << good_matches[match_index].distance << std::endl;
+        //cv::Point2f point2d_prior = (*prior_keypoints)[ good_matches[match_index].queryIdx ].pt; // 2D point from model
+        //cv::Point2f point2d_frame = (*keypoints_frame)[ good_matches[match_index].trainIdx ].pt; // 2D point from the scene
         pcl::Correspondence correspondence(good_matches[match_index].trainIdx,
                 good_matches[match_index].queryIdx,
                 good_matches[match_index].distance);
         ptcloud_matches->push_back(correspondence);
-        //        }
     }
-
-#if (DEBUG==true)
-    Eigen::Vector4f xyz_centroid;
-    Eigen::Matrix3f covariance_matrix = Eigen::Matrix3f::Zero();
-    //        pcl::PointCloud<pcl::PointXYZRGB>::iterator ptIter;
-    //        for (ptIter = pcl_ptcloud_sptr->points.begin(); ptIter != pcl_ptcloud_sptr->points.end();
-    //                ++ptIter) {
-    //        for (int ptIdx = 0; ptIdx < pcl_ptcloud_sptr->size(); ptIdx++) {
-    //            pcl::PointXYZRGB pt = *ptIter;
-    //            pcl::PointXYZRGB pt = (*pcl_ptcloud_sptr)[ptIdx];
-    //            std::cout << ptIdx << " : " << pt.x << "," << pt.y << "," << pt.z << ", " << pt.rgba << std::endl;
-    //        }
-
-    pcl::computeMeanAndCovarianceMatrix(*pcl_ptcloud_sptr, covariance_matrix, xyz_centroid);
-    std::cout << "prior size = " << prior_ptcloud_sptr->size() << " frame size = " << pcl_ptcloud_sptr->size() << std::endl;
-    Eigen::toString("mean", xyz_centroid);
-    Eigen::toString("cov", covariance_matrix);
-#endif
 
     // Step 3: Estimate the best 3D transformation using RANSAC
     // Output: trans -- the best estimate of the odometry transform
@@ -1032,19 +997,17 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
             new pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB>);
     ransac_rejector->setInputSource(pcl_ptcloud_sptr);
     ransac_rejector->setInputTarget(prior_ptcloud_sptr);
-    ransac_rejector->setInlierThreshold(0.05);
-    ransac_rejector->setRefineModel(true);
+    ransac_rejector->setInlierThreshold(pcl_inlierThreshold);
+    ransac_rejector->setRefineModel(pcl_refineModel);
     ransac_rejector->setInputCorrespondences(ptcloud_matches);
-    ransac_rejector->setMaximumIterations(400);
+    ransac_rejector->setMaximumIterations(pcl_numIterations);
     pcl::CorrespondencesPtr ptcloud_matches_ransac(new pcl::Correspondences());
     ransac_rejector->getRemainingCorrespondences(*ptcloud_matches, *ptcloud_matches_ransac);
     if (ptcloud_matches_ransac->size() < 2) {
-        printf("Too few inliers from RANSAC transform estimation! Bailing on image...");
+        std::cout << "Too few inliers from RANSAC transform estimation! Bailing on image...";
         bad_frames++;
         if (bad_frames > 2) {
-            printf(" and Re-initializing the estimator.");
-            //prior_descriptors_.release();
-            //keypoints_frame->clear();
+            std::cout << " and re-initializing the estimator.";
             prior_image = frame.clone();
             swapOdometryBuffers();
         }
@@ -1052,9 +1015,11 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     }
     trans = ransac_rejector->getBestTransformation();
     RANSAC_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
-    std::cout << "RANSAC rejection left " << ptcloud_matches_ransac->size() << " inliers." << std::endl;
+    if (VERBOSE) {
+        std::cout << "RANSAC rejection left " << ptcloud_matches_ransac->size() << " inliers." << std::endl;
+        std::cout << "trans=\n" << trans << std::endl;
+    }
     numInliers = ptcloud_matches_ransac->size();
-    //Eigen::toString("trans = ", trans);
 
     // Step 4: Estimate the covariance of our 3D transformation using the boostrap
     // Output: covMatrix -- an estimate of the transformation covariance
@@ -1066,42 +1031,8 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
 
     // Post-process: Save keypoints, descriptors and point cloud of current frame
     //               as the new prior frame.
-    std::cout << "Odom Success." << std::endl;
     prior_image = frame.clone();
     swapOdometryBuffers();
-    //    prior_image = frame.clone();
-    //    prior_keypoints.swap(keypoints_frame);
-    //    keypoints_frame->clear();
-    //    prior_descriptors_.swap(descriptors_frame);
-    //    descriptors_frame->release();
-    //    prior_ptcloud_sptr.swap(pcl_ptcloud_sptr);
-    //    pcl_ptcloud_sptr->clear();
-
-    if (false) {
-        //                pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> TESVD;
-        //                pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB>::Matrix4 transformation2;
-        //                TESVD.estimateRigidTransformation(*pcl_ptcloud_sptr, list_indices_scene_match,
-        //                        *prior_ptcloud, list_indices_prior_match, transformation2);
-        //                std::cout << transformation2(0, 3) << "," <<
-        //                        transformation2(1, 3) << "," <<
-        //                        transformation2(2, 3);
-
-        pcl::SampleConsensusModelRegistration<pcl::PointXYZRGB>::Ptr ransac_model(
-                new pcl::SampleConsensusModelRegistration<pcl::PointXYZRGB>(pcl_ptcloud_sptr));
-        pcl::RandomSampleConsensus<pcl::PointXYZRGB> ransac(ransac_model);
-        ransac.setDistanceThreshold(0.1);
-        ransac.setMaxIterations(5);
-        //                ransac_model->setIndices(list_indices_scene_match);
-        //                ransac_model->setInputTarget(prior_ptcloud, list_indices_prior_match);
-        //upping the verbosity level to see some info
-        pcl::console::VERBOSITY_LEVEL vblvl = pcl::console::getVerbosityLevel();
-        pcl::console::setVerbosityLevel(pcl::console::L_DEBUG);
-        ransac.computeModel(1);
-        pcl::console::setVerbosityLevel(vblvl);
-        Eigen::VectorXf model_coefficients;
-        ransac.getModelCoefficients(model_coefficients);
-        //Eigen::toString("model_coeffs", model_coefficients);
-    }
 
     // Post-process: check consistency of depth frames and mask values
     if (DUMP_RAW_IMAGES) {

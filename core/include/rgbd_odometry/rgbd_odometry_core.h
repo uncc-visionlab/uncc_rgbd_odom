@@ -63,12 +63,16 @@ public:
     prior_descriptors_(new cv::UMat),
     prior_ptcloud_sptr(new pcl::PointCloud<pcl::PointXYZRGB>),
     LOG_ODOMETRY_TO_FILE(false),
-    //COMPUTE_PTCLOUDS(false),
+    //COMPUTE_PTCLOUDS(false),st
     DUMP_MATCH_IMAGES(false),
     DUMP_RAW_IMAGES(false),
     SHOW_ORB_vs_iGRaND(false),
+    VERBOSE(false),
     fast_match(false),
     rmatcher(new RobustMatcher()),
+    pcl_refineModel(true),
+    pcl_numIterations(400),
+    pcl_inlierThreshold(0.05),
     numKeyPoints(600) {
         bool useOpenCL;
         useOpenCL = false;
@@ -83,6 +87,13 @@ public:
 
         std::string depth_processing_str = "none";
         setDepthProcessing(depth_processing_str);
+
+        //pcl::console::VERBOSITY_LEVEL vblvl = pcl::console::getVerbosityLevel();
+        if (VERBOSE) {
+            pcl::console::setVerbosityLevel(pcl::console::L_DEBUG);
+        } else {
+            pcl::console::setVerbosityLevel(pcl::console::L_ALWAYS);
+        }
     }
 
     virtual ~RGBDOdometryCore() {
@@ -104,13 +115,13 @@ public:
             cv::UMat &frameB, cv::UMat &depthimgB,
             Eigen::Matrix4f& trans,
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
-    
+
     bool computeRelativePoseDirectMultiScale(
             const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
             const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
             Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
             int max_iterations_per_level, int start_level, int end_level);
-    
+
     bool computeRelativePoseDirect(
             const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
             const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
@@ -132,7 +143,7 @@ public:
             float &covarianceTime);
 
     void swapOdometryBuffers();
-    
+
     ImageFunctionProvider::Ptr getImageFunctionProvider() const {
         return imageFunctionProvider;
     }
@@ -231,11 +242,16 @@ public:
     bool DUMP_MATCH_IMAGES;
     bool DUMP_RAW_IMAGES;
     bool SHOW_ORB_vs_iGRaND;
+    bool VERBOSE;
     bool fast_match;
     int numKeyPoints;
+    bool pcl_refineModel;
+    int pcl_numIterations;
+    float pcl_inlierThreshold;    
 };
 
 //These write and read functions must be defined for the serialization in FileStorage to work
+
 static void write(cv::FileStorage& fs, const std::string&, const RGBDOdometryCore& x) {
     x.write(fs);
 }
@@ -250,6 +266,7 @@ static void read(const cv::FileNode& node, RGBDOdometryCore& x, const RGBDOdomet
 }
 
 // This function will print our custom class to the console
+
 static std::ostream& operator<<(std::ostream& out, const RGBDOdometryCore& m) {
     out << "{" << " detector = " << m.getMatcher()->detectorStr << ", ";
     out << " descriptor  = " << m.getMatcher()->descriptorStr << ", ";

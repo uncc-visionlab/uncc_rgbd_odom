@@ -35,7 +35,6 @@
 #include <rgbd_odometry/rgbd_odometry_core.h>
 
 #define NUMIDCHARS 3
-#define DEBUG false
 //#define PERFORMANCE_EVAL false
 
 namespace stdpatch {

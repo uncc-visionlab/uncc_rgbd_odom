@@ -3,14 +3,18 @@
 <launch>
     
     <arg name="run_rviz" default="true"/>
-    <arg name="rviz_config" default="uncc_rgbd_odom.rviz"/>
+
+    <arg name="rviz_config_A" default="uncc_rgbd_odom.rviz"/>
+    <arg name="rviz_config_B" default="uncc_rgbd_odom_freiburg.rviz"/>
+    <arg name="rviz_config" default="$(arg rviz_config_A)"/>
+    
     <arg name="run_rgbd_odometry_node" default="true"/>
     <arg name="run_odometry_analysis_node" default="false"/>    
             
     <arg name="bagfile_path_A" default="/server/data/bagfiles/rgbd3f.bag"/>
     <arg name="bagfile_path_B" default="$(env HOME)/bagfiles/rgbd3f.bag"/>
     <arg name="bagfile_path_C" default="$(env HOME)/bagfiles/rgbd_dataset_freiburg1_room_validation.bag"/>
-    <arg name="bagfile_path" default="$(arg bagfile_path_B)"/>
+    <arg name="bagfile_path" default="$(arg bagfile_path_B)"/>        
     <arg name="bagfile_playback_rate" default="0.5"/>
 
     <arg name="camera" default="camera" />
@@ -18,7 +22,10 @@
     <arg name="base_link" default="base_link" />
     <arg name="rgb_optical_frame" default="rgb_optical_frame" />    
     <arg name="rgbd_frame" default="rgbd_frame" />
-                
+
+    <param name="use_sim_time" value="true" />
+    <node pkg="rosbag" type="play" name="player" output="screen" args="-r $(arg bagfile_playback_rate) --clock --quiet --keep-alive $(arg bagfile_path)"/>
+                    
     <group ns="$(arg camera)">
         <node name="uncc_rgbd_odom" pkg="uncc_rgbd_odom" 
               type="uncc_rgbd_odom" output="screen" if="$(arg run_rgbd_odometry_node)">
@@ -50,9 +57,6 @@
             <param name="feature_descriptor"   value = "ORB"/>
         </node>
     </group> 
-
-    <param name="use_sim_time" value="true" />
-    <node pkg="rosbag" type="play" name="player" output="screen" args="-r $(arg bagfile_playback_rate) --clock --quiet --keep-alive $(arg bagfile_path)"/>
 
     <node pkg="rviz" type="rviz" name="rviz" output="screen" 
           args="-d $(find uncc_rgbd_odom)/rviz/$(arg rviz_config)" if="$(arg run_rviz)"/> 

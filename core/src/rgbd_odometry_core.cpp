@@ -144,17 +144,17 @@ static std::vector<cv::Point3_<float>> reconstructParallelized(const cv::Mat_<fl
     float width = depth_image.cols;
 
     depth_image.forEach(
-        [&points, &width, &focal_length, &image_center](const float& z, const int* position) -> void {
-            size_t pixel_y = position[0];
-            size_t pixel_x = position[1];
-            size_t index = pixel_y*width + pixel_x;
+            [&points, &width, &focal_length, &image_center](const float& z, const int* position) -> void {
+                size_t pixel_y = position[0];
+                size_t pixel_x = position[1];
+                size_t index = pixel_y * width + pixel_x;
 
-            if (not std::isnan(z)) {
-                float x = z*(pixel_x - image_center.x)/focal_length.x;
-                float y = z*(pixel_y - image_center.y)/focal_length.y;
-                points[index] = cv::Point3_<float>(x, y, z);
+                if (not std::isnan(z)) {
+                    float x = z * (pixel_x - image_center.x) / focal_length.x;
+                            float y = z * (pixel_y - image_center.y) / focal_length.y;
+                            points[index] = cv::Point3_<float>(x, y, z);
+                }
             }
-        }
     );
 
     return points;
@@ -196,7 +196,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
                 numFeatures, numMatches, numInliers,
                 quat, translation,
                 trans, covMatrix);
-    }    
+    }
     //prior_keyframe_frameid_str = keyframe_frameid_str;
     return odomEstimatorSuccess;
 }
@@ -239,26 +239,26 @@ bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(
         const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
         Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
         int max_iterations_per_level, int start_level, int end_level) {
-    
+
     bool error_decreased = false;
     bool compute_image_gradients = true;
     Eigen::Matrix4f local_odometry_estimate = odometry_estimate;
     Eigen::Matrix<float, 6, 6> local_covariance = covariance;
-    
+
     std::cout << "--- Reprojection Error Minimization ---\n";
 
     for (int level = start_level; level >= end_level; --level) {
 
         std::cout << "Level: " << level << std::endl;
-        
+
         int sample_factor = std::pow(2, level);
 
         cv::Mat sampled_depth_img1, sampled_color_img1;
-        cv::resize(depth_img1, sampled_depth_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
-        cv::resize(color_img1, sampled_color_img1, cv::Size(), 1.0/sample_factor, 1.0/sample_factor, cv::INTER_NEAREST);
+        cv::resize(depth_img1, sampled_depth_img1, cv::Size(), 1.0 / sample_factor, 1.0 / sample_factor, cv::INTER_NEAREST);
+        cv::resize(color_img1, sampled_color_img1, cv::Size(), 1.0 / sample_factor, 1.0 / sample_factor, cv::INTER_NEAREST);
 
         bool level_error_decreased = this->computeRelativePoseDirect(
-            sampled_color_img1, sampled_depth_img1, color_img2, depth_img2, local_odometry_estimate, local_covariance, level, compute_image_gradients, max_iterations_per_level);
+                sampled_color_img1, sampled_depth_img1, color_img2, depth_img2, local_odometry_estimate, local_covariance, level, compute_image_gradients, max_iterations_per_level);
 
         if (level_error_decreased) {
             error_decreased = true;
@@ -282,10 +282,10 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         int level = 0, bool compute_image_gradients = true, int max_iterations = 50) {
 
     // Inverse compositional image alignment with parallelization
-    
+
     if (not (color_img1.isContinuous() and depth_img1.isContinuous() and color_img2.isContinuous() and depth_img2.isContinuous()))
         throw std::runtime_error("Color and Depth cv::Mats must be continuous!");
-    
+
     Pose local_odometry_estimate;
     cv::Matx44f odometry_estimate_cv;
     cv::eigen2cv(odometry_estimate, odometry_estimate_cv);
@@ -306,20 +306,20 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
     const float& fy = intrinsics.at<float>(1, 1);
     const float& cx = intrinsics.at<float>(0, 2);
     const float& cy = intrinsics.at<float>(1, 2);
-    float inv_fx = 1/fx;
-    float inv_fy = 1/fy;
+    float inv_fx = 1.0f / fx;
+    float inv_fy = 1.0f / fy;
     cv::Mat intensity_img1, intensity_img2;
     cv::cvtColor(color_img1, intensity_img1, cv::COLOR_RGB2GRAY);
     cv::cvtColor(color_img2, intensity_img2, cv::COLOR_RGB2GRAY);
     // normalizing intensities to range 0-1
-    intensity_img1.convertTo(intensity_img1, CV_32F, 1.0/255.0);
-    intensity_img2.convertTo(intensity_img2, CV_32F, 1.0/255.0);
+    intensity_img1.convertTo(intensity_img1, CV_32F, 1.0 / 255.0);
+    intensity_img2.convertTo(intensity_img2, CV_32F, 1.0 / 255.0);
 
     // compute image gradients
     static cv::Mat depth_img2_dx, depth_img2_dy, intensity_img2_dx, intensity_img2_dy;
     if (compute_image_gradients) {
-        cv::Mat cdiffX = (cv::Mat_<float>(1,3) << -1.0f, 0, 1.0f);
-        cv::Mat cdiffY = (cv::Mat_<float>(3,1) << -1.0f, 0, 1.0f);
+        cv::Mat cdiffX = (cv::Mat_<float>(1, 3) << -1.0f, 0, 1.0f);
+        cv::Mat cdiffY = (cv::Mat_<float>(3, 1) << -1.0f, 0, 1.0f);
         cv::filter2D(depth_img2, depth_img2_dx, -1, cdiffX);
         cv::filter2D(depth_img2, depth_img2_dy, -1, cdiffY);
         cv::filter2D(intensity_img2, intensity_img2_dx, -1, cdiffX);
@@ -328,10 +328,10 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
 
     // initialize pointclouds
     int sample_factor = std::pow(2, level);
-    std::vector<cv::Point3f> points1 = reconstructParallelized(depth_img1, cv::Point2f(fx, fy)/sample_factor, cv::Point2f(cx, cy)/sample_factor);
+    std::vector<cv::Point3f> points1 = reconstructParallelized(depth_img1, cv::Point2f(fx, fy) / sample_factor, cv::Point2f(cx, cy) / sample_factor);
     cv::Mat ptcloud1(points1, false);
     ptcloud1 = ptcloud1.reshape(3, height1);
-    
+
     cv::Matx33f rotation;
     cv::Vec3f translation;
     cv::Mat pixels_valid(width1*height1, 1, CV_8U);
@@ -367,102 +367,102 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         pixels_valid.setTo(false);
 
         ptcloud1.forEach<cv::Vec3f>(
-            // this lambda runs for each pixel and is parallelized
-            [&](const cv::Vec3f& pt, const int* position) {
+                // this lambda runs for each pixel and is parallelized
+                [&](const cv::Vec3f& pt, const int* position) {
 
-                if (not std::isnan(pt[2])) {
+                    if (not std::isnan(pt[2])) {
 
-                    cv::Vec3f transformed_pt = rotation*pt + translation;
-                    cv::Point2f warped_px;
-                    warped_px.x = (transformed_pt[0] / (transformed_pt[2] * inv_fx)) + cx;
-                    warped_px.y = (transformed_pt[1] / (transformed_pt[2] * inv_fy)) + cy;
+                        cv::Vec3f transformed_pt = rotation * pt + translation;
+                        cv::Point2f warped_px;
+                        warped_px.x = (transformed_pt[0] / (transformed_pt[2] * inv_fx)) + cx;
+                        warped_px.y = (transformed_pt[1] / (transformed_pt[2] * inv_fy)) + cy;
 
-                    float x0 = std::floor(warped_px.x);
-                    float y0 = std::floor(warped_px.y);
-                    float x1 = x0 + 1;
-                    float y1 = y0 + 1;
+                        float x0 = std::floor(warped_px.x);
+                        float y0 = std::floor(warped_px.y);
+                        float x1 = x0 + 1;
+                        float y1 = y0 + 1;
 
-                    if (inImage(x0, y0, height2, width2) and inImage(x1, y1, height2, width2)) {
+                        if (inImage(x0, y0, height2, width2) and inImage(x1, y1, height2, width2)) {
 
-                        // compute corner indices for pointer access
-                        int row_y0 = y0*width2;
-                        int row_y1 = y1*width2;
-                        int index_x0y0 = row_y0 + x0;
-                        int index_x0y1 = row_y1 + x0;
-                        int index_x1y0 = row_y0 + x1;
-                        int index_x1y1 = row_y1 + x1;
+                            // compute corner indices for pointer access
+                            int row_y0 = y0*width2;
+                            int row_y1 = y1*width2;
+                            int index_x0y0 = row_y0 + x0;
+                            int index_x0y1 = row_y1 + x0;
+                            int index_x1y0 = row_y0 + x1;
+                            int index_x1y1 = row_y1 + x1;
 
-                        // compute interpolation weights
-                        float x1w = warped_px.x - x0;
-                        float x0w = 1.0f - x1w;
-                        float y1w = warped_px.y - y0;
-                        float y0w = 1.0f - y1w;
+                            // compute interpolation weights
+                            float x1w = warped_px.x - x0;
+                            float x0w = 1.0f - x1w;
+                            float y1w = warped_px.y - y0;
+                            float y0w = 1.0f - y1w;
 
-                        // interpolate depth related values
-                        float depth_img2_at_warped_px = y0w * (((float *)depth_img2.data)[index_x0y0] * x0w + ((float *)depth_img2.data)[index_x1y0] * x1w)  + 
-                            y1w * (((float *)depth_img2.data)[index_x0y1] * x0w + ((float *)depth_img2.data)[index_x1y1] * x1w);
+                            // interpolate depth related values
+                            float depth_img2_at_warped_px = y0w * (((float *) depth_img2.data)[index_x0y0] * x0w + ((float *) depth_img2.data)[index_x1y0] * x1w) +
+                                    y1w * (((float *) depth_img2.data)[index_x0y1] * x0w + ((float *) depth_img2.data)[index_x1y1] * x1w);
 
-                        float depth2_gradx_at_warped_px = y0w * (((float *)depth_img2_dx.data)[index_x0y0] * x0w + ((float *)depth_img2_dx.data)[index_x1y0] * x1w)  + 
-                            y1w * (((float *)depth_img2_dx.data)[index_x0y1] * x0w + ((float *)depth_img2_dx.data)[index_x1y1] * x1w);
+                            float depth2_gradx_at_warped_px = y0w * (((float *) depth_img2_dx.data)[index_x0y0] * x0w + ((float *) depth_img2_dx.data)[index_x1y0] * x1w) +
+                                    y1w * (((float *) depth_img2_dx.data)[index_x0y1] * x0w + ((float *) depth_img2_dx.data)[index_x1y1] * x1w);
 
-                        float depth2_grady_at_warped_px = y0w * (((float *)depth_img2_dy.data)[index_x0y0] * x0w + ((float *)depth_img2_dy.data)[index_x1y0] * x1w)  + 
-                            y1w * (((float *)depth_img2_dy.data)[index_x0y1] * x0w + ((float *)depth_img2_dy.data)[index_x1y1] * x1w);
+                            float depth2_grady_at_warped_px = y0w * (((float *) depth_img2_dy.data)[index_x0y0] * x0w + ((float *) depth_img2_dy.data)[index_x1y0] * x1w) +
+                                    y1w * (((float *) depth_img2_dy.data)[index_x0y1] * x0w + ((float *) depth_img2_dy.data)[index_x1y1] * x1w);
 
-                        if (not std::isnan(depth_img2_at_warped_px) and not std::isnan(depth2_gradx_at_warped_px) and not std::isnan(depth2_grady_at_warped_px)) {
+                            if (not std::isnan(depth_img2_at_warped_px) and not std::isnan(depth2_gradx_at_warped_px) and not std::isnan(depth2_grady_at_warped_px)) {
 
-                            // interpolate intensity related values
-                            float intensity_img2_at_warped_px = y0w * (((float *)intensity_img2.data)[index_x0y0] * x0w + ((float *)intensity_img2.data)[index_x1y0] * x1w)  + 
-                                y1w * (((float *)intensity_img2.data)[index_x0y1] * x0w + ((float *)intensity_img2.data)[index_x1y1] * x1w);
+                                // interpolate intensity related values
+                                float intensity_img2_at_warped_px = y0w * (((float *) intensity_img2.data)[index_x0y0] * x0w + ((float *) intensity_img2.data)[index_x1y0] * x1w) +
+                                        y1w * (((float *) intensity_img2.data)[index_x0y1] * x0w + ((float *) intensity_img2.data)[index_x1y1] * x1w);
 
-                            float intensity2_gradx_at_warped_px = y0w * (((float *)intensity_img2_dx.data)[index_x0y0] * x0w + ((float *)intensity_img2_dx.data)[index_x1y0] * x1w)  + 
-                                y1w * (((float *)intensity_img2_dx.data)[index_x0y1] * x0w + ((float *)intensity_img2_dx.data)[index_x1y1] * x1w);
+                                float intensity2_gradx_at_warped_px = y0w * (((float *) intensity_img2_dx.data)[index_x0y0] * x0w + ((float *) intensity_img2_dx.data)[index_x1y0] * x1w) +
+                                        y1w * (((float *) intensity_img2_dx.data)[index_x0y1] * x0w + ((float *) intensity_img2_dx.data)[index_x1y1] * x1w);
 
-                            float intensity2_grady_at_warped_px = y0w * (((float *)intensity_img2_dy.data)[index_x0y0] * x0w + ((float *)intensity_img2_dy.data)[index_x1y0] * x1w)  + 
-                                y1w * (((float *)intensity_img2_dy.data)[index_x0y1] * x0w + ((float *)intensity_img2_dy.data)[index_x1y1] * x1w);
+                                float intensity2_grady_at_warped_px = y0w * (((float *) intensity_img2_dy.data)[index_x0y0] * x0w + ((float *) intensity_img2_dy.data)[index_x1y0] * x1w) +
+                                        y1w * (((float *) intensity_img2_dy.data)[index_x0y1] * x0w + ((float *) intensity_img2_dy.data)[index_x1y1] * x1w);
 
-                            // compute index of initial point (pt)
-                            int y = position[0];
-                            int x = position[1];
-                            int index = y*width1 + x;
+                                // compute index of initial point (pt)
+                                int y = position[0];
+                                int x = position[1];
+                                int index = y * width1 + x;
 
-                            pixels_valid.data[index] = true;
+                                pixels_valid.data[index] = true;
 
-                            // compute residuals
-                            float& depth_residual = ((float *)depth_residuals.data)[index];
-                            depth_residual = depth_img2_at_warped_px - transformed_pt[2];
+                                // compute residuals
+                                float& depth_residual = ((float *) depth_residuals.data)[index];
+                                depth_residual = depth_img2_at_warped_px - transformed_pt[2];
 
-                            float& intensity_residual = ((float *)intensity_residuals.data)[index];
-                            const float& intensity_img1_at_xy = ((float *)intensity_img1.data)[index];
-                            intensity_residual = intensity_img2_at_warped_px - intensity_img1_at_xy;
+                                float& intensity_residual = ((float *) intensity_residuals.data)[index];
+                                const float& intensity_img1_at_xy = ((float *) intensity_img1.data)[index];
+                                intensity_residual = intensity_img2_at_warped_px - intensity_img1_at_xy;
 
-                            // evaluate for this pixel: gradient vec = imggrad(I)*Jw at jpt
-                            const cv::Vec3f& jpt = pt; // point where the jacobian will be evaluated
-                            float inv_depth = 1.0f / jpt[2];
-                            float inv_depth_sq = inv_depth*inv_depth;
+                                // evaluate for this pixel: gradient vec = imggrad(I)*Jw at jpt
+                                const cv::Vec3f& jpt = pt; // point where the jacobian will be evaluated
+                                float inv_depth = 1.0f / jpt[2];
+                                float inv_depth_sq = inv_depth*inv_depth;
 
-                            float* depth_gradient_vec = depth_gradient_vecs.ptr<float>(index);
-                            depth_gradient_vec[0] = depth2_gradx_at_warped_px * fx * inv_depth + depth2_grady_at_warped_px * 0;
-                            depth_gradient_vec[1] = depth2_gradx_at_warped_px * 0 + depth2_grady_at_warped_px * fy * inv_depth;
-                            depth_gradient_vec[2] = -(depth2_gradx_at_warped_px * fx * jpt[0] + depth2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq - 1.0f;
-                            depth_gradient_vec[3] = -(depth2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + depth2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq - jpt[1];
-                            depth_gradient_vec[4] = (depth2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + depth2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq + jpt[0];
-                            depth_gradient_vec[5] = (-depth2_gradx_at_warped_px * fx * jpt[1] + depth2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
+                                float* depth_gradient_vec = depth_gradient_vecs.ptr<float>(index);
+                                depth_gradient_vec[0] = depth2_gradx_at_warped_px * fx * inv_depth + depth2_grady_at_warped_px * 0;
+                                depth_gradient_vec[1] = depth2_gradx_at_warped_px * 0 + depth2_grady_at_warped_px * fy * inv_depth;
+                                depth_gradient_vec[2] = -(depth2_gradx_at_warped_px * fx * jpt[0] + depth2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq - 1.0f;
+                                depth_gradient_vec[3] = -(depth2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + depth2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq - jpt[1];
+                                depth_gradient_vec[4] = (depth2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + depth2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq + jpt[0];
+                                depth_gradient_vec[5] = (-depth2_gradx_at_warped_px * fx * jpt[1] + depth2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
 
-                            float* intensity_gradient_vec = intensity_gradient_vecs.ptr<float>(index);
-                            intensity_gradient_vec[0] = intensity2_gradx_at_warped_px * fx * inv_depth + intensity2_grady_at_warped_px * 0;
-                            intensity_gradient_vec[1] = intensity2_gradx_at_warped_px * 0 + intensity2_grady_at_warped_px * fy * inv_depth;
-                            intensity_gradient_vec[2] = -(intensity2_gradx_at_warped_px * fx * jpt[0] + intensity2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq;
-                            intensity_gradient_vec[3] = -(intensity2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + intensity2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq;
-                            intensity_gradient_vec[4] = (intensity2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + intensity2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq;
-                            intensity_gradient_vec[5] = (-intensity2_gradx_at_warped_px * fx * jpt[1] + intensity2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
+                                float* intensity_gradient_vec = intensity_gradient_vecs.ptr<float>(index);
+                                intensity_gradient_vec[0] = intensity2_gradx_at_warped_px * fx * inv_depth + intensity2_grady_at_warped_px * 0;
+                                intensity_gradient_vec[1] = intensity2_gradx_at_warped_px * 0 + intensity2_grady_at_warped_px * fy * inv_depth;
+                                intensity_gradient_vec[2] = -(intensity2_gradx_at_warped_px * fx * jpt[0] + intensity2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq;
+                                intensity_gradient_vec[3] = -(intensity2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + intensity2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq;
+                                intensity_gradient_vec[4] = (intensity2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + intensity2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq;
+                                intensity_gradient_vec[5] = (-intensity2_gradx_at_warped_px * fx * jpt[1] + intensity2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
+
+                            }
 
                         }
 
                     }
 
                 }
-
-            }
 
         );
 
@@ -475,7 +475,7 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
         for (int y = 0; y < height1; ++y) {
             for (int x = 0; x < width1; ++x) {
 
-                int index = y*width1 + x;
+                int index = y * width1 + x;
                 uchar& pixel_valid = pixels_valid.data[index];
 
                 if (pixel_valid) {
@@ -484,24 +484,24 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
                     float* intensity_gradient_vec = intensity_gradient_vecs.ptr<float>(index);
 
                     // add pixel's contribution to gradient vector
-                    float& depth_residual = ((float *)depth_residuals.data)[index];
-                    float& intensity_residual = ((float *)intensity_residuals.data)[index];
+                    float& depth_residual = ((float *) depth_residuals.data)[index];
+                    float& intensity_residual = ((float *) intensity_residuals.data)[index];
                     for (int i = 0; i < 6; ++i) {
-                        error_grad_ptr[i] += depth_residual*depth_gradient_vec[i]; 
-                        error_grad_ptr[i] += intensity_weight*intensity_residual*intensity_gradient_vec[i];
+                        error_grad_ptr[i] += depth_residual * depth_gradient_vec[i];
+                        error_grad_ptr[i] += intensity_weight * intensity_residual * intensity_gradient_vec[i];
                     }
 
                     // compute upper triangular component this point contributes to the Hessian
                     float* error_hessian_ptr = error_hessian.ptr<float>(0, 0);
                     for (int row = 0; row < 6; ++row) {
-                        error_hessian_ptr += row;                
+                        error_hessian_ptr += row;
                         for (int col = row; col < 6; ++col, ++error_hessian_ptr) {
-                            *error_hessian_ptr += depth_gradient_vec[row]*depth_gradient_vec[col]; 
-                            *error_hessian_ptr += intensity_gradient_vec[row]*intensity_gradient_vec[col];
+                            *error_hessian_ptr += depth_gradient_vec[row] * depth_gradient_vec[col];
+                            *error_hessian_ptr += intensity_gradient_vec[row] * intensity_gradient_vec[col];
                         }
                     }
 
-                    error += depth_residual*depth_residual + intensity_weight_sq*intensity_residual*intensity_residual;
+                    error += depth_residual * depth_residual + intensity_weight_sq * intensity_residual*intensity_residual;
                     num_constraints++;
 
                 }
@@ -541,12 +541,12 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
             reason_stopped = std::string("Error increased.");
         }
 
-        if (not(error_decreased and enough_constraints and param_update_valid)) { 
+        if (not(error_decreased and enough_constraints and param_update_valid)) {
             // don't update the parameters, stop iterating now
             local_odometry_estimate = prev_odometry_estimate;
             error = last_error;
             break;
-        } else if (param_max <= 8e-6) { 
+        } else if (param_max <= 8e-6) {
             // finish this update and then stop iterating
             reason_stopped = std::string("Minimum detected.");
             iterate = false;
@@ -557,8 +557,8 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
 
         // update parameters via composition
         prev_odometry_estimate = local_odometry_estimate;
-        delta_pose_update.setFromTwist(cv::Vec3f((float *)param_update.data), 
-                cv::Vec3f((float *)param_update.data + 3));
+        delta_pose_update.setFromTwist(cv::Vec3f((float *) param_update.data),
+                cv::Vec3f((float *) param_update.data + 3));
         delta_pose_update.invertInPlace();
         Pose::multiply(delta_pose_update, local_odometry_estimate, local_odometry_estimate);
 
@@ -568,8 +568,8 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
 
     // invert the estimate that we return
     local_odometry_estimate.invertInPlace();
-    odometry_estimate = Eigen::Map<Eigen::Matrix<float, 4, 4, Eigen::RowMajor>>(local_odometry_estimate.getTransform().val);
-    covariance = Eigen::Map<Eigen::Matrix<float, 6, 6, Eigen::RowMajor>>((float *)error_hessian.data);
+    odometry_estimate = Eigen::Map<Eigen::Matrix<float, 4, 4, Eigen::RowMajor >> (local_odometry_estimate.getTransform().val);
+    covariance = Eigen::Map<Eigen::Matrix<float, 6, 6, Eigen::RowMajor >> ((float *) error_hessian.data);
 
     std::cout << "Initial Error: " << initial_error << "\n";
     std::cout << "Final Error: " << error << "\n";
@@ -600,6 +600,26 @@ int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& d
     detector_->detect(frame, *keypoints_frame, mask);
     int numFeatures = keypoints_frame->size();
     detector_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
+
+    // Detect keypoint positions that, after rounding, lie within the masked region
+    // and delete them from the keypoint vector.
+    std::vector<cv::KeyPoint>::iterator keyptIterator;
+    for (keyptIterator = keypoints_frame->begin();
+            keyptIterator != keypoints_frame->end(); /*++keyptIterator*/) {
+        cv::KeyPoint kpt = *keyptIterator;
+        int offset = (round(kpt.pt.y) * dimg.cols + round(kpt.pt.x));
+        if (((int) mask.getMat(cv::ACCESS_READ).data[offset]) == 0) {
+            //float depth = ((float *) depth_frame.getMat(cv::ACCESS_READ).data)[offset];
+            //                std::cout << "mask = " << ((int) mask.getMat(cv::ACCESS_READ).data[offset])
+            //                        << " depth = " << depth << std::endl;
+            // key point found that lies in/too close to the masked region!!
+            keyptIterator = keypoints_frame->erase(keyptIterator);
+            //std::cout << "called erase on pt = (" << kpt.pt.x << ", " << kpt.pt.y << ")" << std::endl;
+        } else {
+            ++keyptIterator;
+        }
+    }
+
     //printf("execution time = %dms\n", (int) (t * 1000. / cv::getTickFrequency()));
     if (SHOW_ORB_vs_iGRaND) {
         cv::UMat frame_vis = frame.clone(); // refresh visualization frame
@@ -748,6 +768,16 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
     return true;
 }
 
+void RGBDOdometryCore::swapOdometryBuffers() {
+    //prior_image = frame.clone();
+    prior_keypoints.swap(keypoints_frame);
+    keypoints_frame->clear();
+    prior_descriptors_.swap(descriptors_frame);
+    descriptors_frame->release();
+    prior_ptcloud_sptr.swap(pcl_ptcloud_sptr);
+    pcl_ptcloud_sptr->clear();
+}
+
 bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         Eigen::Matrix4f& trans,
         Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
@@ -822,8 +852,6 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     //             (x,y) location
     // Output: keypoints_frame   -- keypoint (x,y) locations
     //         descriptors_frame -- descriptor values 
-    keypoints_frame.reset(new std::vector<cv::KeyPoint>);
-    descriptors_frame.reset(new cv::UMat);
     numFeatures = computeKeypointsAndDescriptors(frame, dimg, mask,
             rmatcher->detectorStr, rmatcher->detector_, rmatcher->extractor_,
             keypoints_frame, descriptors_frame,
@@ -835,31 +863,20 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         bad_frames++;
         if (bad_frames > 2) {
             printf(" and Re-initializing the estimator.");
-            prior_descriptors_.release();
+            prior_image = frame.clone();
+            swapOdometryBuffers();
         }
         return false;
     }
 
     // Step 1: Create a PCL point cloud object from newly detected feature points having matches/correspondence
     // Output: pcl_ptcloud_sptr -- a 3D point cloud of the 3D surface locations at all detected keypoints
-    //if (!COMPUTE_PTCLOUDS) {
     int i = 0;
     std::cout << "Found " << keypoints_frame->size() << " key points in frame." << std::endl;
     std::vector<cv::KeyPoint>::iterator keyptIterator;
     for (keyptIterator = keypoints_frame->begin();
-            keyptIterator != keypoints_frame->end(); /*++keyptIterator*/) {
+            keyptIterator != keypoints_frame->end(); ++keyptIterator) {
         cv::KeyPoint kpt = *keyptIterator;
-        int offset = (round(kpt.pt.y) * depth_frame.cols + round(kpt.pt.x));
-        if (((int) mask.getMat(cv::ACCESS_READ).data[offset]) == 0) {
-            //float depth = ((float *) depth_frame.getMat(cv::ACCESS_READ).data)[offset];
-            //                std::cout << "mask = " << ((int) mask.getMat(cv::ACCESS_READ).data[offset])
-            //                        << " depth = " << depth << std::endl;
-            // key point found that lies in/too close to the masked region!!
-            keyptIterator = keypoints_frame->erase(keyptIterator);
-            continue;
-        } else {
-            ++keyptIterator;
-        }
         pcl::PointXYZRGB pt;
         pt = convertRGBD2XYZ(kpt.pt, frame.getMat(cv::ACCESS_READ),
                 dimg, rgbCamera_Kmatrix);
@@ -867,20 +884,19 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         pcl_ptcloud_sptr->push_back(pt);
         if (std::isnan(kpt.pt.x) || std::isnan(kpt.pt.y) ||
                 std::isnan(pt.x) || std::isnan(pt.y) || std::isnan(pt.z)) {
-            printf("%d : 2d (x,y)=(%f,%f)  mask(x,y)=%d (x,y,z)=(%f,%f,%f)\n",
+            int offset = (round(kpt.pt.y) * dimg.cols + round(kpt.pt.x));
+            printf("ERROR found NaN in 3D measurement data %d : 2d (x,y)=(%f,%f)  mask(x,y)=%d (x,y,z)=(%f,%f,%f)\n",
                     i++, kpt.pt.x, kpt.pt.y,
                     mask.getMat(cv::ACCESS_READ).data[offset],
                     pt.x, pt.y, pt.z);
         }
     }
-    //}
 
-    // Preprocess: Stop execution if a prior keypoints, descriptors and point cloud not available
-    if (!prior_descriptors_ || prior_descriptors_->empty()) {
+    // Preprocess: Stop execution if prior keypoints, descriptors or point cloud not available
+    if (prior_keypoints->empty()) {
+        std::cout << "Aborting Odom, no prior image available." << std::endl;
         prior_image = frame.clone();
-        prior_keypoints = keypoints_frame;
-        prior_descriptors_ = descriptors_frame;
-        prior_ptcloud_sptr = pcl_ptcloud_sptr;
+        swapOdometryBuffers();
         return false;
     }
 
@@ -911,7 +927,8 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         bad_frames++;
         if (bad_frames > 2) {
             printf(" and Re-initializing the estimator.");
-            prior_descriptors_.release();
+            prior_image = frame.clone();
+            swapOdometryBuffers();
         }
         return false;
     }
@@ -938,7 +955,13 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         cv::drawMatches(prior_image, *prior_keypoints, frame, *keypoints_frame, good_matches,
                 matchImage, cv::Scalar::all(-1), cv::Scalar::all(-1),
                 std::vector<char>(), cv::DrawMatchesFlags::DEFAULT);
-        //                    std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+
+        cv::Mat ocv_depth_img_vis;
+        cv::convertScaleAbs(dimg, ocv_depth_img_vis, 255.0f / 8.0f);
+        cv::imshow("DEPTH", ocv_depth_img_vis);
+        cv::waitKey(3);
+
+        //std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
         try {
             cv::imshow("Display window", matchImage); // Show our image inside it.
             cv::waitKey(3);
@@ -1020,7 +1043,10 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         bad_frames++;
         if (bad_frames > 2) {
             printf(" and Re-initializing the estimator.");
-            prior_descriptors_.release();
+            //prior_descriptors_.release();
+            //keypoints_frame->clear();
+            prior_image = frame.clone();
+            swapOdometryBuffers();
         }
         return false;
     }
@@ -1040,10 +1066,16 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
 
     // Post-process: Save keypoints, descriptors and point cloud of current frame
     //               as the new prior frame.
+    std::cout << "Odom Success." << std::endl;
     prior_image = frame.clone();
-    prior_keypoints = keypoints_frame;
-    prior_descriptors_ = descriptors_frame;
-    prior_ptcloud_sptr = pcl_ptcloud_sptr;
+    swapOdometryBuffers();
+    //    prior_image = frame.clone();
+    //    prior_keypoints.swap(keypoints_frame);
+    //    keypoints_frame->clear();
+    //    prior_descriptors_.swap(descriptors_frame);
+    //    descriptors_frame->release();
+    //    prior_ptcloud_sptr.swap(pcl_ptcloud_sptr);
+    //    pcl_ptcloud_sptr->clear();
 
     if (false) {
         //                pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> TESVD;
@@ -1089,8 +1121,9 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
             cv::imwrite(keyframe_frameid_str + "_mask.png", mask);
         } catch (cv::Exception& e) {
             printf("cv_bridge exception: %s", e.what());
-            return true;
+            return false;
         }
     }
+    return true;
 }
 

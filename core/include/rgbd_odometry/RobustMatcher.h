@@ -14,6 +14,7 @@
 #include <boost/shared_ptr.hpp>
 
 #include <opencv2/features2d.hpp>
+
 #ifdef HAVE_OPENCV_NONFREE   
 #include <opencv2/xfeatures2d.hpp>
 #include <opencv2/xfeatures2d/nonfree.hpp>

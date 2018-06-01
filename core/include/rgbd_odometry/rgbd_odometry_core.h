@@ -56,7 +56,12 @@ public:
 
     RGBDOdometryCore() :
     imageFunctionProvider(new ImageFunctionProvider),
+    keypoints_frame(new std::vector<cv::KeyPoint>),
+    descriptors_frame(new cv::UMat),
     pcl_ptcloud_sptr(new pcl::PointCloud<pcl::PointXYZRGB>),
+    prior_keypoints(new std::vector<cv::KeyPoint>),
+    prior_descriptors_(new cv::UMat),
+    prior_ptcloud_sptr(new pcl::PointCloud<pcl::PointXYZRGB>),
     LOG_ODOMETRY_TO_FILE(false),
     //COMPUTE_PTCLOUDS(false),
     DUMP_MATCH_IMAGES(false),
@@ -126,6 +131,8 @@ public:
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
             float &covarianceTime);
 
+    void swapOdometryBuffers();
+    
     ImageFunctionProvider::Ptr getImageFunctionProvider() const {
         return imageFunctionProvider;
     }

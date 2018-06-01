@@ -243,7 +243,6 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
         const sensor_msgs::ImageConstPtr& rgb_msg,
         const sensor_msgs::CameraInfoConstPtr& info_msg) {
 
-
     ros::Time timestamp = depth_msg->header.stamp;
     static int frame_id = 0;
     //ROS_DEBUG("Heard rgbd image.");
@@ -281,13 +280,11 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
     cv::UMat frame = rgb_img_ptr->image.getUMat(cv::ACCESS_READ);
     bool odomEstimatorSuccess = computeRelativePose(frame, depthimg, trans, covMatrix);
     std::cout << "trans=\n" << trans << std::endl;
-    if (!odomEstimatorSuccess) {
-        return;
-    }
+
     Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
     Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
 
-    if (initializationDone || true) {
+    if (initializationDone && odomEstimatorSuccess) {
         tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
         tf::Transform xform(tf_quat,
                 tf::Vector3(translation[0], translation[1], translation[2]));
@@ -446,7 +443,6 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         //                    quat, translation,
         //                    trans, covMatrix, transform_vector);
         //        }
-
         if (pairIdx == trackedIdx && initializationDone) {
             tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
             tf::Transform xform(tf_quat,

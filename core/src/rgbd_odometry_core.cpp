@@ -136,7 +136,8 @@ void logTransformData(//std::string& frameid, ros::Time& frame_time,
     }
 }
 
-static std::vector<cv::Point3_<float>> reconstructParallelized(const cv::Mat_<float>& depth_image, const cv::Point_<float>& focal_length, const cv::Point_<float>& image_center) {
+static std::vector<cv::Point3_<float>> reconstructParallelized(const cv::Mat_<float>& depth_image,
+        const cv::Point_<float>& focal_length, const cv::Point_<float>& image_center) {
 
     std::vector<cv::Point3_<float>> points;
     float nan = std::numeric_limits<float>::quiet_NaN();
@@ -218,8 +219,6 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
     if (!odomEstimatorSuccess) {
         return false;
     }
-    // trigger a re-initialization of the odom algorithm
-    prior_descriptors_.release();
     Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
     Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
     if (LOG_ODOMETRY_TO_FILE) {
@@ -232,6 +231,29 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
     }
     //prior_keyframe_frameid_str = keyframe_frameid_str;
     return odomEstimatorSuccess;
+}
+
+struct RGBD_Data {
+    cv::Mat color_img;
+    cv::Mat depth_img;
+};
+
+bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
+        Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
+        int max_iterations_per_level, int start_level, int end_level) {
+    static RGBD_Data rgbdImg;
+    static bool haveImage1 = false;
+    if (haveImage1) {
+        return computeRelativePoseDirectMultiScale(
+                rgbdImg.color_img, rgbdImg.depth_img, // warp image
+                color_img2, depth_img2, // template image
+                odometry_estimate, covariance,
+                max_iterations_per_level, start_level, end_level);
+    }
+    rgbdImg.color_img = color_img2.clone();
+    rgbdImg.depth_img = depth_img2.clone();
+    haveImage1 = true;
+    return false;
 }
 
 bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(

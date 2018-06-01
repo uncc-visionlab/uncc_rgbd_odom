@@ -276,11 +276,17 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
     }
 
     Eigen::Matrix4f trans;
+
     double cov[36];
     Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
     cv::UMat depthimg = depth_img_ptr->image.getUMat(cv::ACCESS_READ);
     cv::UMat frame = rgb_img_ptr->image.getUMat(cv::ACCESS_READ);
     bool odomEstimatorSuccess = computeRelativePose(frame, depthimg, trans, covMatrix);
+
+    //float covf[36];
+    //Eigen::Map<Eigen::Matrix<float, 6, 6> > covMatrixf(covf);
+    //Eigen::Matrix<float, 6, 6> covMatrixf2;
+    //bool odomEstimatorSuccess = computeRelativePoseDirectMultiScale(rgb_img_ptr->image, depth_img_ptr->image, trans, covMatrixf2, 10, 3, 1);
 
     Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
     Eigen::Vector3f translation(trans.block<3, 1>(0, 3));

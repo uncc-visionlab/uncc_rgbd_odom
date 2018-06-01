@@ -116,6 +116,10 @@ public:
             Eigen::Matrix4f& trans,
             Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
 
+    bool computeRelativePoseDirectMultiScale(const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
+            Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
+            int max_iterations_per_level, int start_level, int end_level);
+
     bool computeRelativePoseDirectMultiScale(
             const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
             const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
@@ -247,7 +251,7 @@ public:
     int numKeyPoints;
     bool pcl_refineModel;
     int pcl_numIterations;
-    float pcl_inlierThreshold;    
+    float pcl_inlierThreshold;
 };
 
 //These write and read functions must be defined for the serialization in FileStorage to work

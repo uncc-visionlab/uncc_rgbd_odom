@@ -51,7 +51,7 @@ find_package(catkin REQUIRED roscpp rospy genmsg std_msgs geometry_msgs sensor_m
 # freenect_launch not available for jade on ubuntu yet 1/4/2016
 #             tf2 tf2_ros pcl_ros freenect_launch openni2_launch rgbd_launch)
 #             tf2 tf2_ros pcl_ros openni2_launch rgbd_launch rgbd_drivers_uncc)
-             tf2 tf2_ros pcl_ros rgbd_drivers_uncc)
+             tf2 tf2_ros pcl_ros)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)

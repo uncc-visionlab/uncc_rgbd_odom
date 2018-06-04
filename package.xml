@@ -51,7 +51,6 @@
     <depend>tf</depend>
     <depend>pcl_ros</depend>
     <depend>eigen</depend>
-    <depend>rgbd_drivers_uncc</depend>
     <!-- The *_depend tags are used to specify dependencies -->
     <!-- Dependencies can be catkin packages or system dependencies -->
     <!-- Examples: -->

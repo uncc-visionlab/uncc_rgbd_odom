@@ -561,7 +561,8 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
     local_odometry_estimate.invertInPlace();
     odometry_estimate = Eigen::Map<Eigen::Matrix<float, 4, 4, Eigen::RowMajor >> (local_odometry_estimate.getTransform().val);
     covariance = Eigen::Map<Eigen::Matrix<float, 6, 6, Eigen::RowMajor >> ((float *) error_hessian.data);
-
+    covariance = -covariance.inverse(); // Covariance matrix is the negative inverse of the Hessian
+    
     std::cout << "Initial Error: " << initial_error << "\n";
     std::cout << "Final Error: " << error << "\n";
     std::cout << "Iterations: " << iterations << "\n";

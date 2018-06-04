@@ -63,11 +63,11 @@ public:
     prior_descriptors_(new cv::UMat),
     prior_ptcloud_sptr(new pcl::PointCloud<pcl::PointXYZRGB>),
     LOG_ODOMETRY_TO_FILE(false),
-    //COMPUTE_PTCLOUDS(false),st
+    //COMPUTE_PTCLOUDS(false),
     DUMP_MATCH_IMAGES(false),
     DUMP_RAW_IMAGES(false),
     SHOW_ORB_vs_iGRaND(false),
-    DIRECT_ODOM(true),
+    DIRECT_ODOM(false),
     VERBOSE(false),
     fast_match(false),
     rmatcher(new RobustMatcher()),

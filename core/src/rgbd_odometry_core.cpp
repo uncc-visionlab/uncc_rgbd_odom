@@ -225,29 +225,6 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
     return odomEstimatorSuccess;
 }
 
-struct RGBD_Data {
-    cv::Mat color_img;
-    cv::Mat depth_img;
-};
-
-bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
-        Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
-        int max_iterations_per_level, int start_level, int end_level) {
-    static RGBD_Data rgbdImg;
-    static bool haveImage1 = false;
-    if (haveImage1) {
-        return computeRelativePoseDirectMultiScale(
-                rgbdImg.color_img, rgbdImg.depth_img, // warp image
-                color_img2, depth_img2, // template image
-                odometry_estimate, covariance,
-                max_iterations_per_level, start_level, end_level);
-    }
-    rgbdImg.color_img = color_img2.clone();
-    rgbdImg.depth_img = depth_img2.clone();
-    haveImage1 = true;
-    return false;
-}
-
 bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(
         const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
         const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image

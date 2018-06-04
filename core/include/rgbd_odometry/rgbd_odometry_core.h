@@ -67,6 +67,7 @@ public:
     DUMP_MATCH_IMAGES(false),
     DUMP_RAW_IMAGES(false),
     SHOW_ORB_vs_iGRaND(false),
+    DIRECT_ODOM(true),
     VERBOSE(false),
     fast_match(false),
     rmatcher(new RobustMatcher()),
@@ -115,10 +116,6 @@ public:
             cv::UMat &frameB, cv::UMat &depthimgB,
             Eigen::Matrix4f& trans,
             Eigen::Matrix<float, 6, 6>& covMatrix);
-
-    bool computeRelativePoseDirectMultiScale(const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
-            Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
-            int max_iterations_per_level, int start_level, int end_level);
 
     bool computeRelativePoseDirectMultiScale(
             const cv::Mat& color_img1, const cv::Mat& depth_img1, // warp image
@@ -246,6 +243,7 @@ public:
     bool DUMP_MATCH_IMAGES;
     bool DUMP_RAW_IMAGES;
     bool SHOW_ORB_vs_iGRaND;
+    bool DIRECT_ODOM;
     bool VERBOSE;
     bool fast_match;
     int numKeyPoints;

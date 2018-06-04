@@ -275,15 +275,28 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
         setRGBCameraIntrinsics(cameraMatrix);
     }
 
-    Eigen::Matrix4f trans;
+    Eigen::Matrix4f trans = Eigen::Matrix4f::Identity();
 
-    Eigen::Matrix<float, 6, 6> covMatrix;
-    cv::UMat depthimg = depth_img_ptr->image.getUMat(cv::ACCESS_READ);
-    cv::UMat frame = rgb_img_ptr->image.getUMat(cv::ACCESS_READ);
-    bool odomEstimatorSuccess = computeRelativePose(frame, depthimg, trans, covMatrix);
+    Eigen::Matrix<float, 6, 6> covMatrix = Eigen::Matrix<float, 6, 6>::Zero();
+    bool odomEstimatorSuccess = false;
 
-    //bool odomEstimatorSuccess = computeRelativePoseDirectMultiScale(rgb_img_ptr->image, depth_img_ptr->image, trans, covMatrix, 10, 3, 1);
-
+    if (!DIRECT_ODOM) {
+        cv::UMat depthimg = depth_img_ptr->image.getUMat(cv::ACCESS_READ);
+        cv::UMat frame = rgb_img_ptr->image.getUMat(cv::ACCESS_READ);
+        odomEstimatorSuccess = computeRelativePose(frame, depthimg, trans, covMatrix);
+    } else {
+        static cv_bridge::CvImageConstPtr prev_rgb_img_ptr, prev_depth_img_ptr;
+        if (prev_rgb_img_ptr) {
+            odomEstimatorSuccess = computeRelativePoseDirectMultiScale(
+                    prev_rgb_img_ptr->image, prev_depth_img_ptr->image, // warp image
+                    rgb_img_ptr->image, depth_img_ptr->image, // template image
+                    trans, covMatrix,
+                    100, 3, 1);
+        }
+        prev_rgb_img_ptr = rgb_img_ptr;
+        prev_depth_img_ptr = depth_img_ptr;
+    }
+    
     if (initializationDone && odomEstimatorSuccess) {
         publishOdometry(trans, covMatrix, keyframe_frameid_str);
     }

@@ -277,63 +277,15 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
 
     Eigen::Matrix4f trans;
 
-    double cov[36];
-    Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
+    Eigen::Matrix<float, 6, 6> covMatrix;
     cv::UMat depthimg = depth_img_ptr->image.getUMat(cv::ACCESS_READ);
     cv::UMat frame = rgb_img_ptr->image.getUMat(cv::ACCESS_READ);
     bool odomEstimatorSuccess = computeRelativePose(frame, depthimg, trans, covMatrix);
 
-    //float covf[36];
-    //Eigen::Map<Eigen::Matrix<float, 6, 6> > covMatrixf(covf);
-    //Eigen::Matrix<float, 6, 6> covMatrixf2;
-    //bool odomEstimatorSuccess = computeRelativePoseDirectMultiScale(rgb_img_ptr->image, depth_img_ptr->image, trans, covMatrixf2, 10, 3, 1);
-
-    Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
-    Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
+    //bool odomEstimatorSuccess = computeRelativePoseDirectMultiScale(rgb_img_ptr->image, depth_img_ptr->image, trans, covMatrix, 10, 3, 1);
 
     if (initializationDone && odomEstimatorSuccess) {
-        tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
-        tf::Transform xform(tf_quat,
-                tf::Vector3(translation[0], translation[1], translation[2]));
-        tf::StampedTransform xformStamped(xform, frame_time, keyframe_frameid_str, keyframe_frameid_str);
-        geometry_msgs::TransformStamped gxform;
-        tf::transformStampedTFToMsg(xformStamped, gxform);
-        gxform.header.frame_id = keyframe_frameid_str;
-        // publish geometry_msgs::pose with covariance message
-        geometry_msgs::PoseWithCovarianceStamped pose_w_cov_msg;
-        geometry_msgs::PoseWithCovarianceStamped odom_w_cov_msg;
-        geometry_msgs::TransformStamped pose_transform;
-        tf::Transform new_pose;
-        new_pose.mult(rgbd_pose, xform);
-        tf::StampedTransform new_pose_stamped(new_pose, frame_time, "pose", "");
-        tf::transformStampedTFToMsg(new_pose_stamped, pose_transform);
-        pose_w_cov_msg.pose.pose.orientation = pose_transform.transform.rotation;
-        pose_w_cov_msg.pose.pose.position.x = pose_transform.transform.translation.x;
-        pose_w_cov_msg.pose.pose.position.y = pose_transform.transform.translation.y;
-        pose_w_cov_msg.pose.pose.position.z = pose_transform.transform.translation.z;
-        for (int offset = 0; offset < 36; offset++) {
-            pose_w_cov_msg.pose.covariance[offset] = cov[offset];
-        }
-        pose_w_cov_msg.header.stamp = frame_time;
-        pose_w_cov_msg.header.frame_id = keyframe_frameid_str;
-        pubPose_w_cov.publish(pose_w_cov_msg);
-
-        odom_w_cov_msg.pose.pose.orientation = gxform.transform.rotation;
-        odom_w_cov_msg.pose.pose.position.x = gxform.transform.translation.x;
-        odom_w_cov_msg.pose.pose.position.y = gxform.transform.translation.y;
-        odom_w_cov_msg.pose.pose.position.z = gxform.transform.translation.z;
-        for (int offset = 0; offset < 36; offset++) {
-            odom_w_cov_msg.pose.covariance[offset] = cov[offset];
-        }
-        odom_w_cov_msg.header.stamp = frame_time;
-        odom_w_cov_msg.header.frame_id = keyframe_frameid_str;
-        pubOdom_w_cov.publish(odom_w_cov_msg);
-
-        // publish current estimated pose to tf and update current pose estimate
-        changePose(xform);
-
-        // publish geometry_msgs::StampedTransform message
-        pubXforms.publish(gxform);
+        publishOdometry(trans, covMatrix, keyframe_frameid_str);
     }
     prior_keyframe_frameid_str = keyframe_frameid_str;
 }
@@ -422,8 +374,7 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         cv::Ptr<std::vector<cv::KeyPoint> > keypoints_frame(new std::vector<cv::KeyPoint>);
         cv::Ptr<cv::UMat> descriptors_frame(new cv::UMat);
 #endif
-        double cov[36];
-        Eigen::Map<Eigen::Matrix<double, 6, 6 >> covMatrix(cov);
+        Eigen::Matrix<float, 6, 6 > covMatrix;
         Eigen::Matrix4f trans;
         int numFeatures = 0, numMatches = 0, numInliers = 0;
 
@@ -436,8 +387,6 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         if (!odomEstimatorSuccess) {
             return;
         }
-        Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
-        Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
         //        if (LOG_ODOMETRY_TO_FILE) {
         //            logTransformData(keyframe_frameid_str, frame_time,
         //                    rmatcher->detectorStr, rmatcher->descriptorStr,
@@ -447,51 +396,63 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         //                    trans, covMatrix, transform_vector);
         //        }
         if (pairIdx == trackedIdx && initializationDone) {
-            tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
-            tf::Transform xform(tf_quat,
-                    tf::Vector3(translation[0], translation[1], translation[2]));
-            tf::StampedTransform xformStamped(xform, frame_time, keyframe_frameid_str, keyframe_frameid_str);
-            geometry_msgs::TransformStamped gxform;
-            tf::transformStampedTFToMsg(xformStamped, gxform);
-            gxform.header.frame_id = keyframe_frameid_str;
-            // publish geometry_msgs::pose with covariance message
-            geometry_msgs::PoseWithCovarianceStamped pose_w_cov_msg;
-            geometry_msgs::PoseWithCovarianceStamped odom_w_cov_msg;
-            geometry_msgs::TransformStamped pose_transform;
-            tf::Transform new_pose;
-            new_pose.mult(rgbd_pose, xform);
-            tf::StampedTransform new_pose_stamped(new_pose, frame_time, "pose", "");
-            tf::transformStampedTFToMsg(new_pose_stamped, pose_transform);
-            pose_w_cov_msg.pose.pose.orientation = pose_transform.transform.rotation;
-            pose_w_cov_msg.pose.pose.position.x = pose_transform.transform.translation.x;
-            pose_w_cov_msg.pose.pose.position.y = pose_transform.transform.translation.y;
-            pose_w_cov_msg.pose.pose.position.z = pose_transform.transform.translation.z;
-            for (int offset = 0; offset < 36; offset++) {
-                pose_w_cov_msg.pose.covariance[offset] = cov[offset];
-            }
-            pose_w_cov_msg.header.stamp = frame_time;
-            pose_w_cov_msg.header.frame_id = keyframe_frameid_str;
-            pubPose_w_cov.publish(pose_w_cov_msg);
-
-            odom_w_cov_msg.pose.pose.orientation = gxform.transform.rotation;
-            odom_w_cov_msg.pose.pose.position.x = gxform.transform.translation.x;
-            odom_w_cov_msg.pose.pose.position.y = gxform.transform.translation.y;
-            odom_w_cov_msg.pose.pose.position.z = gxform.transform.translation.z;
-            for (int offset = 0; offset < 36; offset++) {
-                odom_w_cov_msg.pose.covariance[offset] = cov[offset];
-            }
-            odom_w_cov_msg.header.stamp = frame_time;
-            odom_w_cov_msg.header.frame_id = keyframe_frameid_str;
-            pubOdom_w_cov.publish(odom_w_cov_msg);
-
-            // publish current estimated pose to tf and update current pose estimate
-            changePose(xform);
-
-            // publish geometry_msgs::StampedTransform message
-            pubXforms.publish(gxform);
+            publishOdometry(trans, covMatrix, keyframe_frameid_str);
         }
     }
     prior_keyframe_frameid_str = keyframe_frameid_str;
+}
+
+void RGBDOdometryEngine::publishOdometry(Eigen::Matrix4f& trans, Eigen::Matrix<float, 6, 6 > covMatrix,
+        std::string& keyframe_frameid_str) {
+    Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
+    Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
+
+    tf::Quaternion tf_quat(quat.x(), quat.y(), quat.z(), quat.w());
+    tf::Transform xform(tf_quat,
+            tf::Vector3(translation[0], translation[1], translation[2]));
+    tf::StampedTransform xformStamped(xform, frame_time, keyframe_frameid_str, keyframe_frameid_str);
+    geometry_msgs::TransformStamped gxform;
+    tf::transformStampedTFToMsg(xformStamped, gxform);
+    gxform.header.frame_id = keyframe_frameid_str;
+    // publish geometry_msgs::pose with covariance message
+    geometry_msgs::PoseWithCovarianceStamped pose_w_cov_msg;
+    geometry_msgs::PoseWithCovarianceStamped odom_w_cov_msg;
+    geometry_msgs::TransformStamped pose_transform;
+    tf::Transform new_pose;
+    new_pose.mult(rgbd_pose, xform);
+    tf::StampedTransform new_pose_stamped(new_pose, frame_time, "pose", "");
+    tf::transformStampedTFToMsg(new_pose_stamped, pose_transform);
+    pose_w_cov_msg.pose.pose.orientation = pose_transform.transform.rotation;
+    pose_w_cov_msg.pose.pose.position.x = pose_transform.transform.translation.x;
+    pose_w_cov_msg.pose.pose.position.y = pose_transform.transform.translation.y;
+    pose_w_cov_msg.pose.pose.position.z = pose_transform.transform.translation.z;
+    int offset;
+    for (int row = 0; row < 6; ++row) {
+        for (int col = 0; col < 6; ++col) {
+            offset = col * 6 + row;
+            pose_w_cov_msg.pose.covariance[offset] = covMatrix(row, col);
+        }
+    }
+    pose_w_cov_msg.header.stamp = frame_time;
+    pose_w_cov_msg.header.frame_id = keyframe_frameid_str;
+    pubPose_w_cov.publish(pose_w_cov_msg);
+
+    odom_w_cov_msg.pose.pose.orientation = gxform.transform.rotation;
+    odom_w_cov_msg.pose.pose.position.x = gxform.transform.translation.x;
+    odom_w_cov_msg.pose.pose.position.y = gxform.transform.translation.y;
+    odom_w_cov_msg.pose.pose.position.z = gxform.transform.translation.z;
+    for (int offset = 0; offset < 36; offset++) {
+        odom_w_cov_msg.pose.covariance[offset] = pose_w_cov_msg.pose.covariance[offset];
+    }
+    odom_w_cov_msg.header.stamp = frame_time;
+    odom_w_cov_msg.header.frame_id = keyframe_frameid_str;
+    pubOdom_w_cov.publish(odom_w_cov_msg);
+
+    // publish current estimated pose to tf and update current pose estimate
+    changePose(xform);
+
+    // publish geometry_msgs::StampedTransform message
+    pubXforms.publish(gxform);
 }
 
 void RGBDOdometryEngine::initializeSubscribersAndPublishers() {

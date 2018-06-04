@@ -87,7 +87,7 @@ void logTransformData(//std::string& frameid, ros::Time& frame_time,
         float detectorTime, float descriptorTime, float matchTime, float RANSACTime, float covarianceTime,
         int numFeatures, int numMatches, int numInliers,
         Eigen::Quaternionf& quat, Eigen::Vector3f& trans,
-        Eigen::Matrix4f& transform, Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix) {
+        Eigen::Matrix4f& transform, Eigen::Matrix<float, 6, 6> covMatrix) {
     static int elementIdx = 1;
     static int StreamPrecision = 8;
     static Eigen::IOFormat OctaveFmt(StreamPrecision, 0, ", ", ";\n", "", "", "[", "]");
@@ -176,7 +176,7 @@ static bool inImage(const float& px, const float& py, const float& height, const
 //}
 
 bool RGBDOdometryCore::computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
-        Eigen::Matrix4f& trans, Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix) {
+        Eigen::Matrix4f& trans, Eigen::Matrix<float, 6, 6>& covMatrix) {
     float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
     int numFeatures, numMatches, numInliers;
 
@@ -185,12 +185,9 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
             detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
             numFeatures, numMatches, numInliers);
 
-    if (!odomEstimatorSuccess) {
-        return false;
-    }
-    Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
-    Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
-    if (LOG_ODOMETRY_TO_FILE) {
+    if (odomEstimatorSuccess && LOG_ODOMETRY_TO_FILE) {
+        Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
+        Eigen::Vector3f translation(trans.block<3, 1>(0, 3));        
         logTransformData(//keyframe_frameid_str, frame_time,
                 rmatcher->detectorStr, rmatcher->descriptorStr,
                 detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
@@ -198,13 +195,12 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
                 quat, translation,
                 trans, covMatrix);
     }
-    //prior_keyframe_frameid_str = keyframe_frameid_str;
     return odomEstimatorSuccess;
 }
 
 bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA,
         cv::UMat &frameB, cv::UMat &depthimgB,
-        Eigen::Matrix4f& trans, Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix) {
+        Eigen::Matrix4f& trans, Eigen::Matrix<float, 6, 6>& covMatrix) {
     float detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime;
     int numFeatures, numMatches, numInliers;
 
@@ -216,12 +212,9 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
             trans, covMatrix,
             detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
             numFeatures, numMatches, numInliers);
-    if (!odomEstimatorSuccess) {
-        return false;
-    }
-    Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
-    Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
-    if (LOG_ODOMETRY_TO_FILE) {
+    if (odomEstimatorSuccess && LOG_ODOMETRY_TO_FILE) {
+        Eigen::Quaternionf quat(trans.block<3, 3>(0, 0));
+        Eigen::Vector3f translation(trans.block<3, 1>(0, 3));
         logTransformData(//keyframe_frameid_str, frame_time,
                 rmatcher->detectorStr, rmatcher->descriptorStr,
                 detectorTime, descriptorTime, matchTime, RANSACTime, covarianceTime,
@@ -229,7 +222,6 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA
                 quat, translation,
                 trans, covMatrix);
     }
-    //prior_keyframe_frameid_str = keyframe_frameid_str;
     return odomEstimatorSuccess;
 }
 
@@ -677,7 +669,7 @@ int RGBDOdometryCore::computeKeypointsAndDescriptors(cv::UMat& frame, cv::Mat& d
 bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptcloud_matches_ransac,
         cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
         cv::Ptr<std::vector<cv::KeyPoint> >& prior_keypoints,
-        Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
+        Eigen::Matrix<float, 6, 6>& covMatrix,
         float &covarianceTime) {
     pcl::registration::TransformationEstimationSVD<pcl::PointXYZRGB, pcl::PointXYZRGB> trans_est;
     //        Eigen::Matrix4f transformVal;
@@ -734,7 +726,7 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
     //            std::cout << " pt2_prev = " << pixel_prior.x << ", " << pixel_prior.y << std::endl;
     //            std::cout << " pt2_cur = " << pixel_frame.x << ", " << pixel_frame.y << std::endl;
     //        }
-    Eigen::MatrixXd estimate_matrix(MAX_TRIALS, 6);
+    Eigen::MatrixXf estimate_matrix(MAX_TRIALS, 6);
     float center_x = rgbCamera_Kmatrix.at<float>(0, 2);
     float center_y = rgbCamera_Kmatrix.at<float>(1, 2);
     // Combine unit conversion (if necessary) with scaling by focal length for computing (X,Y)
@@ -784,7 +776,7 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
     }
     //double cov[36];
     //Eigen::Map<Eigen::Matrix<double, 6, 6> > covMatrix(cov);
-    Eigen::MatrixXd centered = estimate_matrix.rowwise() - estimate_matrix.colwise().mean();
+    Eigen::MatrixXf centered = estimate_matrix.rowwise() - estimate_matrix.colwise().mean();
     covMatrix = (centered.adjoint() * centered) / double(estimate_matrix.rows() - 1);
     covarianceTime = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
     return true;
@@ -802,7 +794,7 @@ void RGBDOdometryCore::swapOdometryBuffers() {
 
 bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         Eigen::Matrix4f& trans,
-        Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
+        Eigen::Matrix<float, 6, 6>& covMatrix,
         float& detector_time, float& descriptor_time, float& match_time,
         float& RANSAC_time, float& covarianceTime,
         int& numFeatures, int& numMatches, int& numInliers) {
@@ -950,7 +942,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         std::cout << "Too few key point matches in the images! Bailing on image...";
         bad_frames++;
         if (bad_frames > 2) {
-            std::cout << " and re-initializing the estimator.";
+            std::cout << " and re-initializing the estimator." << std::endl;
             prior_image = frame.clone();
             swapOdometryBuffers();
         }
@@ -1029,7 +1021,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         std::cout << "Too few inliers from RANSAC transform estimation! Bailing on image...";
         bad_frames++;
         if (bad_frames > 2) {
-            std::cout << " and re-initializing the estimator.";
+            std::cout << " and re-initializing the estimator." << std::endl;
             prior_image = frame.clone();
             swapOdometryBuffers();
         }

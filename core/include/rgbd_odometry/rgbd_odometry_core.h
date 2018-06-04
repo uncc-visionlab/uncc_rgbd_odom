@@ -102,19 +102,19 @@ public:
     bool computeRelativePose(cv::UMat& frame,
             cv::UMat& depthimg,
             Eigen::Matrix4f& trans,
-            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
+            Eigen::Matrix<float, 6, 6>& covMatrix,
             float& detector_time, float& descriptor_time, float& match_time,
             float& RANSAC_time, float& covarianceTime,
             int& numFeatures, int& numMatches, int& numInliers);
 
     bool computeRelativePose(cv::UMat &frame, cv::UMat &depthimg,
             Eigen::Matrix4f& trans,
-            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
+            Eigen::Matrix<float, 6, 6>& covMatrix);
 
     bool computeRelativePose(cv::UMat &frameA, cv::UMat &depthimgA,
             cv::UMat &frameB, cv::UMat &depthimgB,
             Eigen::Matrix4f& trans,
-            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix);
+            Eigen::Matrix<float, 6, 6>& covMatrix);
 
     bool computeRelativePoseDirectMultiScale(const cv::Mat& color_img2, const cv::Mat& depth_img2, // template image
             Eigen::Matrix4f& odometry_estimate, Eigen::Matrix<float, 6, 6>& covariance,
@@ -143,7 +143,7 @@ public:
     bool estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptcloud_matches_ransac,
             cv::Ptr<std::vector<cv::KeyPoint> >& keypoints_frame,
             cv::Ptr<std::vector<cv::KeyPoint> >& prior_keypoints,
-            Eigen::Map<Eigen::Matrix<double, 6, 6> >& covMatrix,
+            Eigen::Matrix<float, 6, 6>& covMatrix,
             float &covarianceTime);
 
     void swapOdometryBuffers();

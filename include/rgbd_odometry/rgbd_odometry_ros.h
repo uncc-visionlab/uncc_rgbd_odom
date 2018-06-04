@@ -143,6 +143,10 @@ public:
             const sensor_msgs::CameraInfoConstPtr& info_msg);
 
     void changePose(tf::Transform xform);
+    
+    void publishOdometry(Eigen::Matrix4f& trans, Eigen::Matrix<float, 6, 6 > covMatrix,
+            std::string& keyframe_frameid_str);
+    
 private:
     // -------------------------
     // Disabling default copy constructor and default

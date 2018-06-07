@@ -7,11 +7,15 @@
     <arg name="run_rgbd_odometry_node" default="true"/>
     <arg name="run_odometry_analysis_node" default="false"/>    
             
+    <!-- namespace for the camera -->
     <arg name="camera" default="camera" />
+    
+    <!-- Setup coordinate TF frame structure is: 
+    map_frame -> initial_body_frame -> initial_optical_frame -> vo_frame -->
     <arg name="map_frame" default="optitrack" />
-    <arg name="base_link" default="base_link" />
-    <arg name="rgb_optical_frame" default="rgb_optical_frame" />    
-    <arg name="rgbd_frame" default="rgbd_frame" />
+    <arg name="initial_body_frame" default="initial_body_frame" />
+    <arg name="initial_optical_frame" default="initial_optical_frame" />    
+    <arg name="vo_frame" default="vo_frame" />
 
     <arg name="sensor_type_sr4000" default="false" />
     <arg name="sensor_type_ds325" default="false" />
@@ -66,8 +70,8 @@
             <!-- <remap from="rgb/camera_info" to="rgb/camera_info"/> 
             <remap from="rgb/input_image" to="rgb/image_raw"/>
             <remap from="depth_registered/input_image" to="depth_registered/image_raw"/> -->
-            <param name="optical_parent" value = "$(arg rgb_optical_frame)"/>
-            <param name="optical_frame" value = "$(arg rgbd_frame)"/>
+            <param name="optical_parent" value = "$(arg initial_optical_frame)"/>
+            <param name="optical_frame" value = "$(arg vo_frame)"/>
 
             <param name="tf_truth_initialize"  value = "false"/>
             <param name="tf_truth_topic"       value = ""/>
@@ -87,14 +91,11 @@
 
     <node pkg="rviz" type="rviz" name="rviz" output="screen" 
           args="-d $(find uncc_rgbd_odom)/rviz/$(arg rviz_config)" if="$(arg run_rviz)"/> 
-    <!--
-    <node name="map_to_base" pkg="tf" 
-          type="static_transform_publisher"  
-          args="0.0 -0.5 0.0  0 0 0 1 $(arg rgbd_frame) $(arg base_link) 100" />
-    -->
-    <node name="base_to_optical" pkg="tf" 
-          type="static_transform_publisher"  
-          args="0.0 0.0 0.5  -0.5 0.5 -0.5 0.5 $(arg map_frame) $(arg rgb_optical_frame) 100" />
 
-    
+    <node name="map_to_base" pkg="tf" type="static_transform_publisher"  
+          args="0.0 0.0 1.5 0 0 0 1 $(arg map_frame) $(arg initial_body_frame) 100" />
+
+    <node name="base_to_optical" pkg="tf" type="static_transform_publisher"  
+          args="0.0 0.0 0.0  -0.5 0.5 -0.5 0.5 $(arg initial_body_frame) $(arg initial_optical_frame) 100" />
+
 </launch>

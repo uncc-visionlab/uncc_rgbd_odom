@@ -67,7 +67,7 @@ public:
     virtual ~Pose() {
     }
     
-    void rotateInPlace(cv::Vec3f& vec) {
+    void rotateInPlace(cv::Vec3f& vec) const {
         cv::Mat rotMat;
         cv::Rodrigues(rodrigues, rotMat);
         float *mm = rotMat.ptr<float>(0, 0);
@@ -76,7 +76,7 @@ public:
         vec[2] = mm[6] * vec[0] + mm[7] * vec[1] + mm[8] * vec[2];
     }
 
-    void transformInPlace(cv::Vec3f& pt) {
+    void transformInPlace(cv::Vec3f& pt) const {
         cv::Mat rotMat;
         cv::Rodrigues(rodrigues, rotMat);
         //std::cout << "rodMat " << rotMat << std::endl;

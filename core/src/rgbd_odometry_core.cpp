@@ -730,8 +730,8 @@ bool RGBDOdometryCore::estimateCovarianceBootstrap(pcl::CorrespondencesPtr ptclo
 
             depth_sq = pt3_rgb_source.z * pt3_rgb_source.z;
             std_normal_sample = distribution(generator) * (1.425e-3f) * depth_sq;
-            pt3_rgb_source.x += std_normal_sample * ((pixel_frame.x - center_x) / constant_x);
-            pt3_rgb_source.y += std_normal_sample * ((pixel_frame.y - center_y) / constant_y);
+            pt3_rgb_source.x += std_normal_sample * ((pixel_frame.x - center_x) * constant_x);
+            pt3_rgb_source.y += std_normal_sample * ((pixel_frame.y - center_y) * constant_y);
             pt3_rgb_source.z += std_normal_sample;
 
             tgtCloud.push_back(pt3_rgb_target);

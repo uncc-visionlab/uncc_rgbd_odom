@@ -443,7 +443,8 @@ void RGBDOdometryEngine::publishOdometry(Eigen::Matrix4f& trans, Eigen::Matrix<f
     for (int row = 0; row < 6; ++row) {
         for (int col = 0; col < 6; ++col) {
             offset = col * 6 + row;
-            pose_w_cov_msg.pose.covariance[offset] = covMatrix(row, col);
+            //pose_w_cov_msg.pose.covariance[offset] = covMatrix(row, col);
+            0;
         }
     }
     pose_w_cov_msg.header.stamp = frame_time;

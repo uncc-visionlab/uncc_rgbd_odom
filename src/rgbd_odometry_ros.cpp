@@ -296,7 +296,7 @@ void RGBDOdometryEngine::rgbdCallback(const sensor_msgs::ImageConstPtr& depth_ms
         prev_rgb_img_ptr = rgb_img_ptr;
         prev_depth_img_ptr = depth_img_ptr;
     }
-    
+
     if (initializationDone && odomEstimatorSuccess) {
         publishOdometry(trans, covMatrix, keyframe_frameid_str);
     }
@@ -440,12 +440,8 @@ void RGBDOdometryEngine::publishOdometry(Eigen::Matrix4f& trans, Eigen::Matrix<f
     pose_w_cov_msg.pose.pose.position.y = pose_transform.transform.translation.y;
     pose_w_cov_msg.pose.pose.position.z = pose_transform.transform.translation.z;
     int offset;
-    for (int row = 0; row < 6; ++row) {
-        for (int col = 0; col < 6; ++col) {
-            offset = col * 6 + row;
-            //pose_w_cov_msg.pose.covariance[offset] = covMatrix(row, col);
-            0;
-        }
+    for (int offset = 0; offset < 36; offset++) {
+        pose_w_cov_msg.pose.covariance[offset] = 0;
     }
     pose_w_cov_msg.header.stamp = frame_time;
     pose_w_cov_msg.header.frame_id = keyframe_frameid_str;
@@ -455,8 +451,11 @@ void RGBDOdometryEngine::publishOdometry(Eigen::Matrix4f& trans, Eigen::Matrix<f
     odom_w_cov_msg.pose.pose.position.x = gxform.transform.translation.x;
     odom_w_cov_msg.pose.pose.position.y = gxform.transform.translation.y;
     odom_w_cov_msg.pose.pose.position.z = gxform.transform.translation.z;
-    for (int offset = 0; offset < 36; offset++) {
-        odom_w_cov_msg.pose.covariance[offset] = pose_w_cov_msg.pose.covariance[offset];
+    for (int row = 0; row < 6; ++row) {
+        for (int col = 0; col < 6; ++col) {
+            offset = col * 6 + row;
+            odom_w_cov_msg.pose.covariance[offset] = covMatrix(row, col);
+        }
     }
     odom_w_cov_msg.header.stamp = frame_time;
     odom_w_cov_msg.header.frame_id = keyframe_frameid_str;

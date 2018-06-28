@@ -794,7 +794,8 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     // Output: depth_frame -- a CV_32F (single float) depth image with units meters
     uchar depthtype = depthimg.getMat(cv::ACCESS_READ).type() & CV_MAT_DEPTH_MASK;
     if (depthtype == CV_16U) {
-        std::cout << "Converting Kinect-style depth image to floating point depth image." << std::endl;
+        if (VERBOSE)
+          std::cout << "Converting Kinect-style depth image to floating point depth image." << std::endl;
         int width = depthimg.cols;
         int height = depthimg.rows;
         depth_frame.create(height, width, CV_32F);
@@ -813,7 +814,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     } else if (depthtype == CV_32F) {
         depth_frame = depthimg.clone();
     } else {
-        std::cout << "Error depth frame numeric format not recognized." << std::endl;
+        std::cout << "Error depth frame numeric format not recognized: " << depthtype << "." << std::endl;
     }
 
     // Preprocess: Compute mask to ignore invalid depth measurements
@@ -994,9 +995,22 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     ransac_rejector->setInputCorrespondences(ptcloud_matches);
     ransac_rejector->setMaximumIterations(pcl_numIterations);
     pcl::CorrespondencesPtr ptcloud_matches_ransac(new pcl::Correspondences());
+    ptcloud_matches_ransac->clear();
     ransac_rejector->getRemainingCorrespondences(*ptcloud_matches, *ptcloud_matches_ransac);
-    if (ptcloud_matches_ransac->size() < 2) {
-        std::cout << "Too few inliers from RANSAC transform estimation! Bailing on image...";
+    trans = ransac_rejector->getBestTransformation();
+    RANSAC_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
+    numInliers = ptcloud_matches_ransac->size();
+    
+    // RANSAC outputs Identity if it fails, but doesn't indicate otherwise
+    bool no_solution = trans.isIdentity(1e-8);
+    
+    if (VERBOSE) {
+        std::cout << "RANSAC rejection left " << numInliers << " inliers, " << (no_solution ? "but did not find" : " and found") << " a solution"  << std::endl;
+        std::cout << "trans=\n" << trans << std::endl;
+    }
+    
+    if (numInliers < 2 || no_solution) {
+        std::cout << "RANSAC transform estimation failed to find good solution! Bailing on image...";
         bad_frames++;
         if (bad_frames > 2) {
             std::cout << " and re-initializing the estimator." << std::endl;
@@ -1005,13 +1019,6 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
         }
         return false;
     }
-    trans = ransac_rejector->getBestTransformation();
-    RANSAC_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
-    if (VERBOSE) {
-        std::cout << "RANSAC rejection left " << ptcloud_matches_ransac->size() << " inliers." << std::endl;
-        std::cout << "trans=\n" << trans << std::endl;
-    }
-    numInliers = ptcloud_matches_ransac->size();
 
     // Step 4: Estimate the covariance of our 3D transformation using the boostrap
     // Output: covMatrix -- an estimate of the transformation covariance

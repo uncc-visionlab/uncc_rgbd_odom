@@ -19,6 +19,11 @@
 #include <rgbd_odometry/opencv_function_dev.h>
 #endif
 
+#define UNCC_DBG(msg, ...) \
+  if(VERBOSE) { \
+    printf((msg), ##__VA_ARGS__); \
+  }
+
 int toIndex(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, int column, int row) {
     return row * cloud->width + column;
 }
@@ -65,7 +70,7 @@ pcl::PointXYZRGB convertRGBD2XYZ(cv::Point2f point2d_frame, cv::Mat rgb_img, cv:
     float x, y, z;
     if (!std::isfinite(depth)) {
         x = y = z = bad_point;
-        std::cout << "CONVERTING BAD (NAN) KEYPOINT at location (" << iu << ", " << iv << ")!" << std::endl;
+        printf("CONVERTING BAD (NAN) KEYPOINT at location (%d, %d)\n", iu, iv);
     } else {
         // Fill in XYZ
         x = (iu - center_x) * depth * constant_x;
@@ -236,11 +241,11 @@ bool RGBDOdometryCore::computeRelativePoseDirectMultiScale(
     Eigen::Matrix4f local_odometry_estimate = odometry_estimate;
     Eigen::Matrix<float, 6, 6> local_covariance = covariance;
 
-    std::cout << "--- Reprojection Error Minimization ---\n";
+    UNCC_DBG("--- Reprojection Error Minimization ---\n");
 
     for (int level = start_level; level >= end_level; --level) {
 
-        std::cout << "Level: " << level << std::endl;
+        UNCC_DBG("Level: %d\n" ,level);
 
         int sample_factor = std::pow(2, level);
 
@@ -563,10 +568,10 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
     covariance = Eigen::Map<Eigen::Matrix<float, 6, 6, Eigen::RowMajor >> ((float *) error_hessian.data);
     covariance = -covariance.inverse(); // Covariance matrix is the negative inverse of the Hessian
     
-    std::cout << "Initial Error: " << initial_error << "\n";
-    std::cout << "Final Error: " << error << "\n";
-    std::cout << "Iterations: " << iterations << "\n";
-    std::cout << "Reason Stopped: " << reason_stopped << "\n---\n";
+    UNCC_DBG("Initial Error: %f\n", initial_error);
+    UNCC_DBG("Final Error: %f\n", error);
+    UNCC_DBG("Iterations: %d\n", iterations);
+    UNCC_DBG("Reason Stopped: %s\n", reason_stopped.c_str());
 
     if (error <= initial_error)
         return true;
@@ -794,8 +799,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     // Output: depth_frame -- a CV_32F (single float) depth image with units meters
     uchar depthtype = depthimg.getMat(cv::ACCESS_READ).type() & CV_MAT_DEPTH_MASK;
     if (depthtype == CV_16U) {
-        if (VERBOSE)
-          std::cout << "Converting Kinect-style depth image to floating point depth image." << std::endl;
+        UNCC_DBG("Converting Kinect-style depth image to floating point depth image.");
         int width = depthimg.cols;
         int height = depthimg.rows;
         depth_frame.create(height, width, CV_32F);
@@ -852,10 +856,10 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
 
     // Preprocess: Stop execution if not enough keypoints detected
     if (keypoints_frame->size() < 10) {
-        std::cout << "Too few keypoints! Bailing on image...";
+        UNCC_DBG("Too few keypoints! Bailing on image...");
         bad_frames++;
         if (bad_frames > 2) {
-            std::cout << " and re-initializing the estimator." << std::endl;
+            UNCC_DBG(" and re-initializing the estimator.\n");
             prior_image = frame.clone();
             swapOdometryBuffers();
         }
@@ -864,9 +868,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
 
     // Step 1: Create a PCL point cloud object from newly detected feature points having matches/correspondence
     // Output: pcl_ptcloud_sptr -- a 3D point cloud of the 3D surface locations at all detected keypoints
-    if (VERBOSE) {
-        std::cout << "Found " << keypoints_frame->size() << " key points in frame." << std::endl;
-    }
+    UNCC_DBG("Found %lu key points in frame.",  keypoints_frame->size());
     int i = 0;
     std::vector<cv::KeyPoint>::iterator keyptIterator;
     for (keyptIterator = keypoints_frame->begin();
@@ -889,7 +891,7 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
 
     // Preprocess: Stop execution if prior keypoints, descriptors or point cloud not available
     if (prior_keypoints->empty()) {
-        std::cout << "Aborting Odom, no prior image available." << std::endl;
+        UNCC_DBG("Aborting Odom, no prior image available.\n");
         prior_image = frame.clone();
         swapOdometryBuffers();
         return false;
@@ -908,20 +910,18 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     } else {
         rmatcher->robustMatch(good_matches, *prior_descriptors_, *descriptors_frame);
     }
-    if (VERBOSE) {
-        std::cout << "from (" << prior_keypoints->size() << "," << keypoints_frame->size() << ")"
-                << " key points found " << good_matches.size() << " good matches." << std::endl;
-    }
+    UNCC_DBG("from (%lu,%lu) key points, found %lu good matches.\n", 
+             prior_keypoints->size(), keypoints_frame->size(), good_matches.size());
     // measure performance of matching algorithm
     match_time = (cv::getTickCount() - t) * 1000. / cv::getTickFrequency();
 
     // Preprocess: Stop execution unless enough matches exist to continue the algorithm.
     numMatches = good_matches.size();
     if (good_matches.size() < 6) {
-        std::cout << "Too few key point matches in the images! Bailing on image...";
+        UNCC_DBG("Too few key point matches in the images! Bailing on image...");
         bad_frames++;
         if (bad_frames > 2) {
-            std::cout << " and re-initializing the estimator." << std::endl;
+            UNCC_DBG(" and re-initializing the estimator.");
             prior_image = frame.clone();
             swapOdometryBuffers();
         }
@@ -1004,16 +1004,13 @@ bool RGBDOdometryCore::computeRelativePose(cv::UMat& frame, cv::UMat& depthimg,
     // RANSAC outputs Identity if it fails, but doesn't indicate otherwise
     bool no_solution = trans.isIdentity(1e-8);
     
-    if (VERBOSE) {
-        std::cout << "RANSAC rejection left " << numInliers << " inliers, " << (no_solution ? "but did not find" : " and found") << " a solution"  << std::endl;
-        std::cout << "trans=\n" << trans << std::endl;
-    }
+    UNCC_DBG("RANSAC rejection left %d inliers, but %s a solution\n", numInliers, (no_solution ? "but did not find" : " and found"));
     
     if (numInliers < 2 || no_solution) {
-        std::cout << "RANSAC transform estimation failed to find good solution! Bailing on image...";
+        UNCC_DBG("RANSAC transform estimation failed to find good solution! Bailing on image...");
         bad_frames++;
         if (bad_frames > 2) {
-            std::cout << " and re-initializing the estimator." << std::endl;
+            UNCC_DBG(" and re-initializing the estimator.\n");
             prior_image = frame.clone();
             swapOdometryBuffers();
         }

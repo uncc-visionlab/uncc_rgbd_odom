@@ -6,6 +6,7 @@
     <arg name="rviz_config" default="uncc_rgbd_odom.rviz"/>
     <arg name="run_rgbd_odometry_node" default="true"/>
     <arg name="run_odometry_analysis_node" default="false"/>    
+    <arg name="show_3d_cloud" default="true"/>    
             
     <!-- namespace for the camera -->
     <arg name="camera" default="camera" />
@@ -15,7 +16,7 @@
     <arg name="map_frame" default="optitrack" />
     <arg name="initial_body_frame" default="initial_body_frame" />
     <arg name="initial_optical_frame" default="initial_optical_frame" />    
-    <arg name="vo_frame" default="vo_frame" />
+    <arg name="vo_frame" default="camera_rgb_optical_frame" />
 
     <arg name="sensor_type_sr4000" default="false" />
     <arg name="sensor_type_ds325" default="false" />
@@ -97,5 +98,20 @@
 
     <node name="base_to_optical" pkg="tf" type="static_transform_publisher"  
           args="0.0 0.0 0.0  -0.5 0.5 -0.5 0.5 $(arg initial_body_frame) $(arg initial_optical_frame) 100" />
+    
+    <!-- Nodelet manager for this pipeline -->
+    <node pkg="nodelet" type="nodelet" args="manager"
+          name="record_player_manager" output="screen"
+          if="$(arg show_3d_cloud)"/>
+    
+    <!-- Convert it into a point cloud -->
+    <node pkg="nodelet" type="nodelet" name="cloudify"
+          args="load depth_image_proc/point_cloud_xyzrgb record_player_manager --no-bond"
+          if="$(arg show_3d_cloud)">
+        <remap from="depth_registered/image_rect" to="camera/depth_registered/input_image"/>
+        <remap from="depth_registered/points" to="camera/depth_registered/points"/>
+        <remap from="rgb/image_rect_color" to="camera/rgb/input_image"/>
+        <remap from="rgb/camera_info" to="camera/rgb/camera_info"/>
+    </node>
 
 </launch>

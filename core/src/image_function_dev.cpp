@@ -64,6 +64,7 @@ int ImageFunctionProvider::initialize(bool useOpenCL, std::string opencl_path,
     } else {
         std::cout << "OpenCL is NOT AVAILABLE!" << std::endl;
     }
+    return 0;
 }
 
 int ImageFunctionProvider::initOpenCL() {

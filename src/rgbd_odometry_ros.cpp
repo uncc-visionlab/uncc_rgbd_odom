@@ -356,7 +356,7 @@ void RGBDOdometryEngine::rgbdImageCallback(const sensor_msgs::ImageConstPtr& dep
         cv_depthimg_ptr = cv_bridge::toCvShare(depth_msg, sensor_msgs::image_encodings::TYPE_32FC1);
     }
     if (depth_msg->width != rgb_msg_in->width || depth_msg->height != rgb_msg_in->height) {
-        ROS_ERROR("Depth and RGB image dimensions don't match depth=( %fx%f ) rgb=( %dx%d )!",
+        ROS_ERROR("Depth and RGB image dimensions don't match depth=( %dx%d ) rgb=( %dx%d )!",
                 depth_msg->width, depth_msg->height, rgb_msg_in->width, rgb_msg_in->height);
     }
     model_.fromCameraInfo(info_msg);

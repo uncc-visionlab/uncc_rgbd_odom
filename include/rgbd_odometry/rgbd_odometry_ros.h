@@ -59,13 +59,8 @@ public:
         std::string opencl_path, depthmask_cl, tf_truth_topic, calibration_pose;
         std::string optical_parent, optical_frame, depth_processing_str;
         std::string feature_detector, feature_descriptor;
-        bool useOpenCL, tf_truth_initialize;
-
-        nh.param<std::string>("OpenCL_path", opencl_path, ".");
-        nh.param<std::string>("depthmask_cl", depthmask_cl, "depthmask.cl");
-        nh.param("useOpenCL", useOpenCL, false);
-        getImageFunctionProvider()->initialize(useOpenCL, opencl_path, depthmask_cl);
-
+        bool tf_truth_initialize;
+        
         nh.param<std::string>("feature_detector", feature_detector, "ORB");
         nh.param<std::string>("feature_descriptor", feature_descriptor, "ORB");
 

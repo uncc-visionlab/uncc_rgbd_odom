@@ -5,7 +5,7 @@
     <arg name="run_rviz" default="true"/>
 
     <arg name="rviz_config_A" default="uncc_rgbd_odom.rviz"/>
-    <arg name="rviz_config_B" default="uncc_rgbd_odom_freiburg.rviz"/>
+    <arg name="rviz_config_B" default="uncc_rgbd_odom_freiburg.rviz"/>    
     <arg name="rviz_config" default="$(arg rviz_config_A)"/>
     
     <arg name="run_rgbd_odometry_node" default="true"/>
@@ -13,8 +13,9 @@
             
     <arg name="bagfile_path_A" default="/server/data/bagfiles/rgbd3f.bag"/>
     <arg name="bagfile_path_B" default="$(env HOME)/bagfiles/rgbd3f.bag"/>
-    <arg name="bagfile_path_C" default="$(env HOME)/bagfiles/rgbd_dataset_freiburg1_room_validation.bag"/>
-    <arg name="bagfile_path" default="$(arg bagfile_path_B)"/>        
+    <arg name="bagfile_path_C" default="$(env HOME)/bagfiles/rgbd_dataset_freiburg1_room_validation.bag"/>    
+    <arg name="bagfile_path_D" default="/home/arwillis/NetBeansProjects/bagfiles/rgbd-slam_2018-06-28-14-08-49.bag"/> 
+    <arg name="bagfile_path" default="$(arg bagfile_path_D)"/>        
     <arg name="bagfile_playback_rate" default="0.5"/>
 
     <arg name="camera" default="camera" />

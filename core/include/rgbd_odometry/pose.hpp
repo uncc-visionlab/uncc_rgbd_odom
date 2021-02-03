@@ -23,36 +23,36 @@
 #include <opencv2/calib3d.hpp>
 
 class Pose {
-    
 private:
+
     static cv::Matx33f computeMatrixV(const cv::Vec3f& rotation) {
         // Computes the matrix V used in the exponential map
-        
+
         float theta = cv::norm(rotation);
         if (theta > 1e-7) {
             cv::Matx33f w_cross(0.0, -rotation(2), rotation(1), rotation(2), 0.0, -rotation(0), -rotation(1), rotation(0), 0.0);
-            cv::Matx33f w_cross_sq = rotation*rotation.t();
-            return (cv::Matx33f::eye() + ((1-cos(theta))/pow(theta, 2))*w_cross + ((theta - sin(theta))/pow(theta, 3))*w_cross_sq);
+            cv::Matx33f w_cross_sq = rotation * rotation.t();
+            return (cv::Matx33f::eye() + ((1 - cos(theta)) / pow(theta, 2)) * w_cross + ((theta - sin(theta)) / pow(theta, 3)) * w_cross_sq);
         } else {
             return (cv::Matx33f::eye());
         }
-        
+
     }
-    
+
     static cv::Matx33f computeMatrixInvV(const cv::Vec3f& rotation) {
         // Computes the closed form inverse of the matrix V used in the log map
-        
+
         float theta = cv::norm(rotation);
         if (theta > 1e-7) {
             cv::Matx33f w_cross(0.0, -rotation(2), rotation(1), rotation(2), 0.0, -rotation(0), -rotation(1), rotation(0), 0.0);
-            cv::Matx33f w_cross_sq = rotation*rotation.t();
-            return (cv::Matx33f::eye() - 0.5*w_cross + (1/pow(theta, 2))*((1 - (theta*sin(theta)))/(2*(1-cos(theta))))*w_cross_sq);
+            cv::Matx33f w_cross_sq = rotation * rotation.t();
+            return (cv::Matx33f::eye() - 0.5 * w_cross + (1 / pow(theta, 2))*((1 - (theta * sin(theta))) / (2 * (1 - cos(theta)))) * w_cross_sq);
         } else {
             return (cv::Matx33f::eye());
         }
-        
+
     }
-    
+
 public:
 
     Pose() : rodrigues(0, 0, 0), position(0, 0, 0) {
@@ -66,7 +66,7 @@ public:
 
     virtual ~Pose() {
     }
-    
+
     void rotateInPlace(cv::Vec3f& vec) const {
         cv::Mat rotMat;
         cv::Rodrigues(rodrigues, rotMat);
@@ -85,11 +85,11 @@ public:
         pt[1] = mm[3] * pt[0] + mm[4] * pt[1] + mm[5] * pt[2] + position[1];
         pt[2] = mm[6] * pt[0] + mm[7] * pt[1] + mm[8] * pt[2] + position[2];
     }
-    
+
     void getTranslation(cv::Vec3f& _position) const {
         _position = position;
     }
-    
+
     cv::Mat getRotation_Mat() const {
         cv::Mat rotMat;
         cv::Rodrigues(rodrigues, rotMat);
@@ -133,11 +133,11 @@ public:
         this->rodrigues = _rodrigues;
         this->position = _position;
     }
-    
+
     void setFromTwist(const cv::Vec3f& translation, const cv::Vec3f _rodrigues) {
         // Sets this to the transformation corresponding to the SE3 twist (translation, rodrigues)
-        this->rodrigues =  _rodrigues;
-        this->position = this->computeMatrixV(this->rodrigues)*translation;
+        this->rodrigues = _rodrigues;
+        this->position = this->computeMatrixV(this->rodrigues) * translation;
     }
 
     void get(cv::Vec3f& _position, cv::Vec3f& _rodrigues) const {
@@ -177,13 +177,13 @@ public:
         //std::cout << "xform1*xform2 = " << xform1*xform2 << std::endl;
         dest.set(xformA * xformB);
     }
-    
-    Pose operator * (Pose transform) const {
+
+    Pose operator*(Pose transform) const {
         Pose result;
-        result.set(this->getTransform()*transform.getTransform());
+        result.set(this->getTransform() * transform.getTransform());
         return result;
     }
-    
+
     void invertInPlace() {
         cv::Matx44f xformA = getTransform();
         this->set(xformA.inv());

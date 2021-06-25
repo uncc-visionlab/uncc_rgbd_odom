@@ -432,7 +432,8 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
                                 intensity_residual = intensity_img2_at_warped_px - intensity_img1_at_xy;
 
                                 // evaluate for this pixel: gradient vec = imggrad(I)*Jw at jpt
-                                const cv::Vec3f& jpt = pt; // point where the jacobian will be evaluated
+                                //const cv::Vec3f& jpt = pt; // point where the jacobian will be evaluated
+                                const cv::Vec3f& jpt = transformed_pt; // point where the jacobian will be evaluated                                
                                 float inv_depth = 1.0f / jpt[2];
                                 float inv_depth_sq = inv_depth*inv_depth;
 

@@ -441,16 +441,16 @@ bool RGBDOdometryCore::computeRelativePoseDirect(
                                 depth_gradient_vec[0] = depth2_gradx_at_warped_px * fx * inv_depth + depth2_grady_at_warped_px * 0;
                                 depth_gradient_vec[1] = depth2_gradx_at_warped_px * 0 + depth2_grady_at_warped_px * fy * inv_depth;
                                 depth_gradient_vec[2] = -(depth2_gradx_at_warped_px * fx * jpt[0] + depth2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq - 1.0f;
-                                depth_gradient_vec[3] = -(depth2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + depth2_grady_at_warped_px * fy * (-jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq - jpt[1];
-                                depth_gradient_vec[4] = (depth2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] - jpt[0] * jpt[0]) + depth2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq + jpt[0];
+                                depth_gradient_vec[3] = -(depth2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + depth2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq - jpt[1];
+                                depth_gradient_vec[4] = (depth2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + depth2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq + jpt[0];
                                 depth_gradient_vec[5] = (-depth2_gradx_at_warped_px * fx * jpt[1] + depth2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
 
                                 float* intensity_gradient_vec = intensity_gradient_vecs.ptr<float>(index);
                                 intensity_gradient_vec[0] = intensity2_gradx_at_warped_px * fx * inv_depth + intensity2_grady_at_warped_px * 0;
                                 intensity_gradient_vec[1] = intensity2_gradx_at_warped_px * 0 + intensity2_grady_at_warped_px * fy * inv_depth;
                                 intensity_gradient_vec[2] = -(intensity2_gradx_at_warped_px * fx * jpt[0] + intensity2_grady_at_warped_px * fy * jpt[1]) * inv_depth_sq;
-                                intensity_gradient_vec[3] = -(intensity2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + intensity2_grady_at_warped_px * fy * (-jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq;
-                                intensity_gradient_vec[4] = (intensity2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] - jpt[0] * jpt[0]) + intensity2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq;
+                                intensity_gradient_vec[3] = -(intensity2_gradx_at_warped_px * fx * jpt[0] * jpt[1] + intensity2_grady_at_warped_px * fy * (jpt[2] * jpt[2] + jpt[1] * jpt[1])) * inv_depth_sq;
+                                intensity_gradient_vec[4] = (intensity2_gradx_at_warped_px * fx * (jpt[2] * jpt[2] + jpt[0] * jpt[0]) + intensity2_grady_at_warped_px * fy * jpt[0] * jpt[1]) * inv_depth_sq;
                                 intensity_gradient_vec[5] = (-intensity2_gradx_at_warped_px * fx * jpt[1] + intensity2_grady_at_warped_px * fy * jpt[0]) * inv_depth;
 
                             }
